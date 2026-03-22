@@ -1,0 +1,9 @@
+{
+  "name": "@veya/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run"
+  }
+}
