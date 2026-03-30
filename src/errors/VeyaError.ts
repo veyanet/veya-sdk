@@ -7,4 +7,7 @@ export class VeyaError extends Error {
     super(message);
     this.name = 'VeyaError';
   }
+  serialize() {
+    return { message: this.message, status: this.status, code: this.code };
+  }
 }
