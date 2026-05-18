@@ -1,13 +1,17 @@
 export class VeyaError extends Error {
-  constructor(
-    message: string,
-    public readonly status?: number,
-    public readonly code?: string
-  ) {
+  readonly status: number;
+  readonly code?: string;
+  readonly body?: unknown;
+
+  constructor(message: string, status: number, code?: string, body?: unknown) {
     super(message);
-    this.name = 'VeyaError';
+    this.name = "VeyaError";
+    this.status = status;
+    this.code = code;
+    this.body = body;
   }
-  serialize() {
-    return { message: this.message, status: this.status, code: this.code };
-  }
+}
+
+export function isVeyaError(err: unknown): err is VeyaError {
+  return err instanceof VeyaError;
 }
