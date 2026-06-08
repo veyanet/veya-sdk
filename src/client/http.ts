@@ -1,3 +1,6 @@
+/**
+ * Core HTTP network communication interface for Veya API.
+ */
 import { VeyaError } from "../errors/VeyaError.js";
 import type { VeyaConfig } from "../config.js";
 
