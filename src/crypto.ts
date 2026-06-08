@@ -1,3 +1,6 @@
+/**
+ * Cryptographic utility functions including AES-GCM and PBKDF2.
+ */
 import { webcrypto } from "node:crypto";
 import { bytesToBase64, base64ToBytes } from "./utils/encoding.js";
 
