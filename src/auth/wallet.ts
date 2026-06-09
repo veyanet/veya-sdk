@@ -1,3 +1,6 @@
+/**
+ * Handles wallet challenge-response signature logic.
+ */
 import bs58 from "bs58";
 import type { HttpClient } from "../client/http.js";
 
