@@ -1,12 +1,44 @@
 {
   "name": "@veya/sdk",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "description": "Official TypeScript SDK for VEYA — Decentralized compute, ZK memory, shielded configurations, and Solana consensus coordination",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/veyanet/veya-sdk.git"
+  },
+  "keywords": ["veya", "solana", "agents", "privacy", "sdk", "decentralized-compute", "consensus", "cryptography"],
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup",
-    "test": "vitest run"
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
-    "@veya/sdk": "file:."
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
