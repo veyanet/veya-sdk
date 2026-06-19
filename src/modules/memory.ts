@@ -1,3 +1,6 @@
+/**
+ * Zero-knowledge scoped memory module endpoints.
+ */
 import type { HttpClient } from "../client/http.js";
 import type { MemoryEntry } from "../types/index.js";
 import { sha256Hex } from "../utils/hash.js";
