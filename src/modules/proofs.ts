@@ -1,3 +1,6 @@
+/**
+ * Proof anchoring on-chain transactions validation.
+ */
 import type { HttpClient } from "../client/http.js";
 import type { ProofAnchor, VerifyProofResult } from "../types/index.js";
 import { sha256Hex } from "../utils/hash.js";
