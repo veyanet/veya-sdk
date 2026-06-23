@@ -181,6 +181,3 @@ When the execution completes:
 - [protected-execution.md](./protected-execution.md) — TEE Enclave isolated runs
 - [proofs-and-anchoring.md](./proofs-and-anchoring.md) — Manual proof anchoring and verification
 - [types-reference.md](./types-reference.md) — SDK types reference sheet
-
-
-<!-- Nodes update -->

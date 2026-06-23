@@ -64,5 +64,3 @@ describe("decentralized compute resource", () => {
     expect(result.consensus.nodes[0].nodeId).toBe("Node-Alpha");
   });
 });
-
-// Extended verification scenarios

@@ -1,6 +1,3 @@
-/**
- * Secure enclaves protected executions resource.
- */
 import type { HttpClient } from "../client/http.js";
 import type { Execution } from "../types/index.js";
 

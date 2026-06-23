@@ -1,6 +1,3 @@
-/**
- * Agents workspace resource endpoints.
- */
 import type { HttpClient } from "../client/http.js";
 import type { Agent, AgentStatus, DeployAgentInput } from "../types/index.js";
 
