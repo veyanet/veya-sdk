@@ -1,6 +1,3 @@
-/**
- * Solana cluster PDA and program instructions parser.
- */
 import type { HttpClient } from "../client/http.js";
 import type { Environment } from "../types/index.js";
 
