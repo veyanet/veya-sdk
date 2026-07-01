@@ -1,44 +1,69 @@
 {
   "name": "@veya/sdk",
-  "version": "0.1.2",
-  "description": "Official TypeScript SDK for VEYA — Decentralized compute, ZK memory, shielded configurations, and Solana consensus coordination",
+  "version": "1.0.0",
+  "description": "VEYA TypeScript SDK for Robinhood Chain — PQ identity, sealed execution, 2-of-3 consensus, Veya.sol anchoring",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/veyanet/veya-sdk.git"
+    "url": "git+https://github.com/veyanet/veya-sdk.git"
   },
-  "keywords": ["veya", "solana", "agents", "privacy", "sdk", "decentralized-compute", "consensus", "cryptography"],
-  "sideEffects": false,
+  "homepage": "https://github.com/veyanet/veya-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/veyanet/veya-sdk/issues"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
+    },
+    "./pq": {
+      "types": "./dist/pq/index.d.ts",
+      "import": "./dist/pq/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
     "test": "vitest run",
-    "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "prepack": "npm run build"
-  },
-  "engines": {
-    "node": ">=18"
+    "doctor": "tsx scripts/doctor.ts",
+    "live-rpc": "tsx scripts/live-rpc.ts",
+    "example:quickstart": "tsx examples/quickstart.ts",
+    "example:pq": "tsx examples/pq-identity.ts",
+    "example:consensus": "tsx examples/consensus.ts",
+    "example:sealed": "tsx examples/sealed.ts"
   },
   "dependencies": {
-    "bs58": "^6.0.0"
+    "@noble/post-quantum": "^0.6.1",
+    "ethers": "^6.17.0",
+    "hash-wasm": "^4.12.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "tsx": "^4.19.4",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "veya",
+    "robinhood-chain",
+    "post-quantum",
+    "ml-dsa",
+    "kyber",
+    "blake3",
+    "ethers"
+  ]
 }
