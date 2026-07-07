@@ -201,3 +201,190 @@ Verifiers recompute `BLAKE3(public_key_bytes)` locally and compare to the on-cha
 
 ---
 
+## Kyber-768 Session Transport
+
+### Purpose
+
+Kyber (ML-KEM) provides IND-CCA2 secure key encapsulation. VEYA uses Kyber-768 to establish shared secrets between coordination participants. Session keys are derived via BLAKE3 from the shared secret: **never used raw**, **never written to `Veya.sol`**.
+
+### Byte sizes (Kyber-768 / ML-KEM-768)
+
+| Artifact | Bytes | Notes |
+|----------|-------|-------|
+| Public key | 1,184 | KEM encapsulation input |
+| Secret key | 2,400 | Decapsulation only |
+| Ciphertext | 1,088 | Transmitted to decapsulator |
+| Shared secret | 32 | Derived into AES-256-GCM key via BLAKE3 |
+
+### NIST parameter mapping
+
+| NIST designation | Security category | VEYA usage |
+|------------------|-------------------|------------|
+| ML-KEM-512 | Category 1 | Not used |
+| ML-KEM-768 | Category 3 | **Default** session KEM |
+| ML-KEM-1024 | Category 5 | Available in the library; not default |
+
+### KEM flow
+
+```mermaid
+sequenceDiagram
+    participant A as Initiator
+    participant B as Responder
+
+    Note over A,B: B publishes Kyber public key 1184 B
+    A->>A: encapsulate pk_B
+    A->>B: ciphertext 1088 B
+    A->>A: shared_secret_A 32 B
+    B->>B: decapsulate ct sk_B
+    B->>B: shared_secret_B 32 B
+    Note over A,B: BLAKE3 shared_secret plus context to AES-256-GCM key
+```
+
+### TypeScript API
+
+```typescript
+import * as pq from "@veya/sdk/pq";
+import { establishKyberSession, getNodeKyberPublicKey } from "@veya/sdk";
+
+const { publicKey, privateKey } = pq.generateKyberKeys();
+const { ciphertext, sharedSecret } = pq.encapsulateKyber(publicKey);
+const recovered = pq.decapsulateKyber(ciphertext, privateKey);
+
+const session = await establishKyberSession("agent-a", "agent-b");
+// session.sessionId is BLAKE3(from:to:timestamp)
+```
+
+`establishKyberSession` encapsulates to a process-local Kyber key (`getNodeKyberPublicKey`). Session IDs are BLAKE3 of the agent pair plus timestamp. Shared secrets stay in an in-memory map. They are not chain objects.
+
+`routeSecureMessage` runs policy first. On allow, it attaches `kyberSessionId` and an ML-DSA signature over the JSON envelope. Policy is a gate, not a cryptographic afterthought.
+
+### Usage in sealed execution
+
+The SDK passes `sessionEntropy` (32 bytes) to sealed-node as `session_entropy_hex`. Combined with Kyber-derived material, the node derives AES-256-GCM keys. Kyber material **never** lands on-chain.
+
+---
+
+## BLAKE3 Commitments
+
+### Why BLAKE3 over SHA-256?
+
+| Property | SHA-256 | BLAKE3-256 |
+|----------|---------|------------|
+| Classical collision resistance | 128-bit | 128-bit |
+| Post-Grover preimage margin | 128-bit | **256-bit output → 128-bit margin** |
+| Throughput (software) | Moderate | High (WASM in this SDK) |
+| VEYA SDK v1 status | Not used on new paths | **Required** |
+
+SHA-256 provides 128-bit security against Grover's algorithm. BLAKE3 at 256-bit output maintains comfortable margin for long-lived settlement records that must remain verifiable for decades.
+
+The hosted Use-mode content proof may hash with SHA-256 so a browser can preview without a PQ stack. That is an API product choice. This SDK’s `hashBlake3` is BLAKE3 only.
+
+### Byte sizes
+
+| Artifact | Bytes | Encoding |
+|----------|-------|----------|
+| BLAKE3 digest | 32 | Raw or 64 hex chars |
+| Chunk hash (sealed) | 32 | Per ≤8,192-byte ciphertext chunk |
+| Mapping key (EVM) | 32 | keccak of packed fields: not the commitment |
+
+### Commitment domains
+
+| Domain | Input | Output location |
+|--------|-------|-----------------|
+| Execution | Canonical payload bytes | `Attestation.blake3Hash` |
+| Pubkey fingerprint | ML-DSA public key bytes (1,312 B) | `Environment.pqPubkeyHash` |
+| Standalone result | Application-defined 32 bytes | `Commitment.commitment` |
+| Memory content | Memory entry data string | SDK `blake3ContentHash` |
+| Ciphertext chunk | Sealed chunk bytes | `SealedState.blake3CiphertextHash` |
+| Consensus | Validator payload | `NodeResult.blake3_execution_hash` |
+| Kyber session id | `from:to:timestamp` string | In-memory `KyberSession.sessionId` |
+
+### Commitment graph
+
+```mermaid
+flowchart TB
+    subgraph Inputs["Hash Inputs"]
+        PK["ML-DSA pubkey 1312 B"]
+        PL["Execution payload"]
+        CT["Ciphertext chunk"]
+        MEM["Memory content"]
+    end
+    subgraph Blake3["BLAKE3-256"]
+        H["32-byte digest"]
+    end
+    subgraph Outputs["Storage"]
+        MAP["Veya.sol mappings"]
+        EVT["Events"]
+        LOCAL["~/.veya JSON"]
+    end
+    PK --> H
+    PL --> H
+    CT --> H
+    MEM --> H
+    H --> MAP
+    H --> EVT
+    H --> LOCAL
+```
+
+### TypeScript
+
+```typescript
+import { pq } from "@veya/sdk";
+
+const hex = await pq.hashBlake3(payload);
+const bytes = await pq.hashBlake3Bytes(payload);
+```
+
+Implementation: `createBLAKE3()` from `hash-wasm`, `init`, `update`, `digest("hex")`. Empty input is a valid message; do not special-case it as “no hash.”
+
+Unlike some program runtimes, `Veya.sol` does **not** recompute BLAKE3 inside the EVM on `storeSealedState`. The caller supplies `blake3CiphertextHash`. Auditors must recompute BLAKE3(chunk) off-chain and compare. That is a trust-boundary difference versus an in-program hash: the chain guarantees **what hash was declared with what chunk**, not that the hash is well-formed. Always recompute.
+
+---
+
+## AES-256-GCM Sealed Path
+
+Sealed execution is a **process boundary**, not a homomorphic marketplace.
+
+| Step | Primitive | Where |
+|------|-----------|-------|
+| Session entropy | 32 random bytes | SDK caller |
+| Key derivation | Kyber + BLAKE3 | sealed-node |
+| Payload privacy | AES-256-GCM | sealed-node |
+| Output binding | BLAKE3 of result / ciphertext | `SealedExecResult` |
+| Node authenticity | ML-DSA over execution hash | `mldsa_signature` |
+| Data availability | optional chunk + declared hash | `storeSealedState` |
+
+Full TFHE / FHE compute is **not** claimed as live. If a document says “homomorphic” without naming AES-256-GCM as the current path, it is describing a future module, not this SDK.
+
+Fail-closed: if `:7800` is down, `protectedExec` throws. Painting `verified: true` without a node round-trip is a lie this client will not tell.
+
+---
+
+## Hybrid Migration Reality
+
+This SDK does not ship a `ClassicalLegacy` write path for agent identity. New environments register `pqPubkeyHash` from ML-DSA-44. Operators still use secp256k1 wallets to pay gas because that is how Robinhood Chain authenticates transactions.
+
+| Lane | Algorithms | New agent keys | Notes |
+|------|------------|----------------|-------|
+| Agent identity | ML-DSA-44 + BLAKE3 | Required | Fingerprint on-chain |
+| Session transport | Kyber-768 | Required | Off-chain only |
+| Gas / `msg.sender` | secp256k1 | EVM requirement | Not an agent cert |
+| Historical ECDSA agent certs |: | Forbidden | Do not register keccak(ethAddress) as `pqPubkeyHash` |
+
+If you are rotating a fleet that previously treated an Ethereum address as identity, generate ML-DSA keys, register a new environment (or a new `revision` after a contract that supports rotation), and distribute the full pubkey out of band. Dual-signing during a window is an operator procedure, not a SDK mode flag.
+
+```mermaid
+flowchart TD
+    A["Incoming attestation"] --> B["Load ML-DSA-44 pubkey"]
+    B --> C["BLAKE3 pk equals on-chain hash"]
+    C -->|no| F["Reject"]
+    C -->|yes| D["verifyPQ over 32-byte digest"]
+    D -->|fail| F
+    D -->|pass| G["Accept agent identity"]
+    G --> H["Separately: receipt.signer paid gas"]
+```
+
+Never treat `receipt.from` as a substitute for `pqPubkeyHash`.
+
+---
+
