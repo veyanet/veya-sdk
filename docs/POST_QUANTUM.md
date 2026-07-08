@@ -504,3 +504,137 @@ If three validators disagree, first suspect key order and `undefined` fields in 
 
 ---
 
+## Security Properties
+
+| Property | Mechanism | Assumption |
+|----------|-----------|------------|
+| Unforgeability (PQ) | ML-DSA-44 EUF-CMA | Module-LWE hardness |
+| Commitment binding | BLAKE3 collision resistance | Hash function security |
+| Session confidentiality | Kyber-768 IND-CCA2 + AES-256-GCM | Lattice + AES assumptions |
+| Forward audit | Immutable on-chain hash storage | Robinhood Chain liveness |
+| Identity binding | `blake3(pk) == on_chain_hash` | Correct off-chain key distribution |
+| Grover margin | BLAKE3-256 output | 128-bit post-quantum preimage |
+| Gas payer authenticity | secp256k1 `msg.sender` | ECDSA until quantum; not agent cert |
+
+### Threat matrix
+
+| Threat | Affected primitive | Mitigation |
+|--------|-------------------|------------|
+| Shor attack | secp256k1 (gas only) | ML-DSA-44 for agent identity |
+| Grover attack | 128-bit hashes | BLAKE3-256 on SDK paths |
+| HNDL recording | Classical agent certs | PQ-first anchoring today |
+| Key compromise | ML-DSA secret | Rotation + nullifier flags |
+| Validator collusion | Consensus | Require 2-of-3 independent operators |
+| Hash substitution on sealed chunks | Caller-declared hash | Auditor recomputes BLAKE3(chunk) |
+| Wrong chain | All anchors | `ensureRobinhoodChain` |
+
+---
+
+## Domain Separation
+
+BLAKE3 is used in several contexts. Do not feed one domain’s preimage into another domain’s verifier without labeling.
+
+| Domain label (operator convention) | Preimage | Verifier |
+|------------------------------------|----------|----------|
+| Identity | ML-DSA public key bytes | `publicKeyHashBlake3` vs `pqPubkeyHash` |
+| Execution | Canonical payload | `NodeResult` / `attestExecution` |
+| Commitment | Application 32-byte value | `storeCommitment` uniqueness |
+| Memory | Entry `data` string | `readMemory` re-hash |
+| Sealed chunk | Ciphertext bytes | Off-chain recompute vs `blake3CiphertextHash` |
+| Session | `from:to:timestamp` | `establishKyberSession` |
+
+The chain does not enforce domain labels. A 32-byte value is a 32-byte value. Operators who store an identity hash in `commitments[]` and later treat it as an execution hash have a process bug, not a cryptography bug. `anchorPqAttestation` exists specifically to bind identity hash to execution hash as separate fields.
+
+---
+
+## Operational Checklist
+
+- Generate ML-DSA-44 keys only (`generatePQIdentity`)
+- Store secret keys outside the repository (HSM for production)
+- Verify `blake3(pubkey) == on_chain_hash` before trusting identity
+- Verify ML-DSA signature over the 32-byte execution hash before settlement
+- Cross-check attestation hash against consensus quorum when applicable
+- Rotate keys on agent compromise; nullify affected memory entries
+- Run `npm test` in `@veya/sdk` after dependency upgrades
+- Confirm live receipts on the Robinhood explorer (`to` must be Veya.sol)
+- Never introduce SHA-256 on new SDK commitment paths
+- Never document a token address
+- Keep Kyber session maps out of logs (they contain `sharedSecretHex`)
+
+Verify a live receipt:
+
+```bash
+# open in browser
+# https://explorer.testnet.chain.robinhood.com/tx/0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d
+```
+
+Then run the TypeScript verifier in [VERIFICATION.md](./VERIFICATION.md).
+
+---
+
+## Failure Modes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `verifyPQ` false, hash matches | Signed hex string instead of 32-byte digest | Use raw digest bytes |
+| Identity mismatch | Wrong pubkey for agent | Reload from vault |
+| `SignatureTooLarge` | Algorithm larger than cap / garbage bytes | Use ML-DSA-44; check length |
+| Quorum mismatch | Non-canonical JSON | Stable key order |
+| Sealed hash mismatch | Declared hash != BLAKE3(chunk) | Recompute; reject caller hash |
+| Kyber secrets differ | Wrong public key | Encapsulate to the decapsulator’s pk |
+| `CommitmentAlreadyExists` | Same digest written twice | Intended uniqueness; look up original |
+| Chain mismatch | RPC not 46630 | Fix URL; do not disable the guard |
+
+```mermaid
+flowchart TD
+    F["Crypto failure"] --> Q{"Where?"}
+    Q -->|Identity| I["Recompute BLAKE3 pubkey"]
+    Q -->|Signature| S["Confirm 32-byte message"]
+    Q -->|KEM| K["Check pk/sk pair"]
+    Q -->|Quorum| C["Diff node hashes"]
+    I --> A["Accept or reject with reason"]
+    S --> A
+    K --> A
+    C --> A
+```
+
+---
+
+## Invariants
+
+1. Agent identity is ML-DSA-44. `pqPubkeyHash` is BLAKE3 of that public key, 32 bytes.
+2. Commitments in this SDK are BLAKE3-256. keccak256 is EVM addressing, not a VEYA digest.
+3. Kyber-768 shared secrets never appear in `Veya.sol` storage or events.
+4. `attestExecution` may store a signature; it never verifies one.
+5. `storeSealedState` stores the caller’s hash; auditors recompute.
+6. Ethereum ECDSA authenticates the gas payer. It does not authenticate the agent.
+7. `MAX_MLDSA_SIG_LEN` is 4627. ML-DSA-44 signatures are 2420 bytes and fit.
+8. There is no token, mint, or ERC-20 in this cryptographic profile.
+9. Quorum agreement is hash equality, not a count of HTTP 200s with distinct hashes.
+10. Hosted API cryptography is this SDK. A second algorithm set in the API is a bug.
+
+---
+
+## References
+
+| Document | URL / location |
+|----------|----------------|
+| NIST FIPS 203: ML-KEM (Kyber) | https://csrc.nist.gov/pubs/fips/203/final |
+| NIST FIPS 204: ML-DSA (Dilithium) | https://csrc.nist.gov/pubs/fips/204/final |
+| NIST SP 800-38D: AES-GCM | https://csrc.nist.gov/pubs/sp/800/38d/final |
+| BLAKE3 specification | https://github.com/BLAKE3-team/BLAKE3-specs |
+| `@noble/post-quantum` | https://github.com/paulmillr/noble-post-quantum |
+| VEYA architecture | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| Verification procedures | [VERIFICATION.md](./VERIFICATION.md) |
+| Quickstart | [QUICKSTART.md](./QUICKSTART.md) |
+| `Veya.sol` | [../../contracts/Veya.sol](../../contracts/Veya.sol) |
+
+---
+
+<div align="center">
+
+**@veya/sdk Cryptographic Profile**: Post-quantum first. BLAKE3 commitments. Robinhood Chain storage. Hosted API optional.
+
+[Architecture](./ARCHITECTURE.md) • [Verification](./VERIFICATION.md) • [Quickstart](./QUICKSTART.md)
+
+</div>
