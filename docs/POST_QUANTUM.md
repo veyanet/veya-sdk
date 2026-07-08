@@ -388,3 +388,119 @@ Never treat `receipt.from` as a substitute for `pqPubkeyHash`.
 
 ---
 
+## On-Chain vs Off-Chain Verification
+
+```
++------------------------------------------------------------------+
+|                 ON-CHAIN  Veya.sol  chain 46630                  |
+|  Store blake3Hash bytes32                                        |
+|  Store mldsaSig bytes length <= 4627                             |
+|  Store pqPubkeyHash bytes32                                      |
+|  Enforce spending, policy, nullifier rules                       |
+|  Store sealed chunk + caller-declared hash                       |
+|  ECDSA check is the EVM's msg.sender                             |
+|  No ML-DSA verify                                                |
+|  No Kyber decapsulate                                            |
+|  No BLAKE3 opcode                                                |
++------------------------------------------------------------------+
++------------------------------------------------------------------+
+|                 OFF-CHAIN  @veya/sdk  pq/                        |
+|  ML-DSA sign and verify                                          |
+|  Kyber encapsulate / decapsulate                                 |
+|  BLAKE3 hash and compare                                         |
+|  Quorum evaluation                                               |
+|  Full pubkey distribution                                        |
++------------------------------------------------------------------+
+```
+
+```mermaid
+flowchart LR
+    subgraph Chain["Robinhood Chain Immutable Storage"]
+        H["BLAKE3 bytes32"]
+        S["ML-DSA sig optional"]
+        F["PQ fingerprint bytes32"]
+    end
+    subgraph OffChain["Verifier Cryptographic Assurance"]
+        V1["Identity binding"]
+        V2["ML-DSA verify"]
+        V3["Quorum cross-check"]
+    end
+    Chain --> OffChain
+```
+
+This split is intentional. Robinhood Chain provides **immutable audit storage**; operators and auditors provide **cryptographic verification**. See [VERIFICATION.md](./VERIFICATION.md).
+
+---
+
+## TypeScript Implementation
+
+Workspace dependencies (from `package.json`):
+
+| Dependency | Purpose |
+|------------|---------|
+| `@noble/post-quantum` | ML-DSA-44 (`ml-dsa.js`) and ML-KEM-768 (`ml-kem.js`) |
+| `hash-wasm` | BLAKE3 |
+| `ethers` | JSON-RPC, wallets, `Veya.sol` ABI |
+
+Modules:
+
+| File | Exports |
+|------|---------|
+| `src/pq/mldsa.ts` | `generatePQIdentity`, `signPQ`, `verifyPQ`, `publicKeyHashBlake3` |
+| `src/pq/kyber.ts` | `generateKyberKeys`, `encapsulateKyber`, `decapsulateKyber` |
+| `src/pq/blake3.ts` | `hashBlake3`, `hashBlake3Bytes` |
+| `src/pq/index.ts` | re-export; also `@veya/sdk/pq` subpath |
+
+Tests in `src/pq/pq.test.ts` round-trip sign/verify and hash stability. `src/chain.test.ts` pins network constants so a port cannot silently revert to another chain’s IDs.
+
+Do not add a second PQ library “for browsers” that disagrees on byte lengths. One implementation, two runtimes (Node and whatever bundler consumes ESM).
+
+---
+
+## Key Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Generate: generatePQIdentity
+    Generate --> Fingerprint: BLAKE3 pubkey
+    Fingerprint --> Register: registerEnvironment
+    Register --> Distribute: secure pubkey channel
+    Distribute --> Sign: ML-DSA over BLAKE3 digest
+    Sign --> Anchor: attestExecution or storeCommitment
+    Anchor --> Verify: off-chain audit
+    Verify --> Rotate: on compromise
+    Rotate --> Generate
+```
+
+| Step | Operation | Storage |
+|------|-----------|---------|
+| 1. Generation | `generatePQIdentity()` | Secret key off-chain |
+| 2. Fingerprint | BLAKE3 hash | On-chain at registration |
+| 3. Distribution | Full pubkey | Encrypted file, HSM, operator handoff |
+| 4. Signing | Detached signature over digest |: |
+| 5. Anchoring | Submit hash and optional sig | `Veya.sol` mappings |
+| 6. Verification | Off-chain `verifyPQ` | Before trusting attestation |
+| 7. Rotation | New fingerprint; new agent UUID if needed | Old key revoked operationally |
+
+Secret keys must never be committed to git, logged, or stored on-chain. `VEYA_DEPLOYER_PRIVATE_KEY` is an **Ethereum** key for gas. It is not the ML-DSA secret. Losing either is bad; confusing them is worse.
+
+---
+
+## Attestation Canonicalization
+
+Inconsistent serialization breaks signature verification and quorum.
+
+| Context | Canonical form | Signs |
+|---------|----------------|-------|
+| Validator consensus | JSON body `{ task_id, payload }` as posted | BLAKE3 of node-canonical bytes |
+| SDK memory | UTF-8 string of `data` field | BLAKE3 of string |
+| Sealed execution | `payload_json` string as provided | BLAKE3 inside sealed flow |
+| On-chain attestation | 32-byte BLAKE3 hash | ML-DSA over raw 32 bytes |
+| Secure MCP envelope | `JSON.stringify` of unsigned message | ML-DSA over UTF-8 bytes |
+
+Always sign the **hash bytes**, not the hex string, for on-chain attestations.
+
+If three validators disagree, first suspect key order and `undefined` fields in JSON, not lattice math.
+
+---
+
