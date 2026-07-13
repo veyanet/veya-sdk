@@ -1,75 +1,102 @@
-import { resolveConfig, type VeyaConfig } from "../config.js";
-import { HttpClient } from "./http.js";
-import { walletAuth, type WalletAuthInput } from "../auth/wallet.js";
-import { EnvironmentsResource } from "../modules/environments.js";
-import { AgentsResource } from "../modules/agents.js";
-import { MemoryResource } from "../modules/memory.js";
-import { ExecutionsResource } from "../modules/executions.js";
-import { ProofsResource } from "../modules/proofs.js";
-import { ApiKeysResource } from "../modules/apiKeys.js";
-import { SolanaResource } from "../modules/solana.js";
-import { ProtectionResource } from "../modules/protection.js";
-import { DecentralizedComputeResource } from "../modules/compute.js";
+import { explorerTxUrl, pingRpc } from "../chain.js";
+import { resolveConfig, describeConfig, type ResolvedVeyaConfig, type VeyaClientConfig } from "../config.js";
+import { runConsensus } from "../compute/consensus.js";
+import { VeyaSdkError } from "../errors/veya-error.js";
+import * as pq from "../pq/index.js";
+import { protectedExec } from "../sealed/protectedExec.js";
+import { requireVerifiedSeal } from "../sealed/types.js";
+import { parseProofFromTransaction } from "./receipts.js";
+import { EvmAnchor } from "./evm.js";
 
 /**
- * Entry point for the VEYA HTTP API.
+ * High-level VEYA SDK client — local PQ crypto, Robinhood Chain anchoring, consensus, sealed exec.
  *
- * ```bash
- * npm install @veya/sdk
- * ```
- *
- * ```ts
- * import { Veya } from "@veya/sdk";
- * const veya = new Veya({ apiUrl: process.env.VEYA_API_URL, apiKey: process.env.VEYA_API_KEY });
- * const envs = await veya.environments.list();
- * ```
+ * Construct without a private key for hashing / consensus / sealed-node calls.
+ * Pass payerPrivateKey (or VEYA_DEPLOYER_PRIVATE_KEY) to enable EvmAnchor writes.
  */
-export class Veya {
-  readonly config: VeyaConfig;
-  private readonly http: HttpClient;
+export class VeyaClient {
+  readonly config: ResolvedVeyaConfig;
+  evm?: EvmAnchor;
 
-  readonly environments: EnvironmentsResource;
-  readonly agents: AgentsResource;
-  readonly memory: MemoryResource;
-  readonly executions: ExecutionsResource;
-  readonly proofs: ProofsResource;
-  readonly apiKeys: ApiKeysResource;
-  readonly solana: SolanaResource;
-  readonly protection: ProtectionResource;
-  readonly compute: DecentralizedComputeResource;
-
-  constructor(options: Partial<VeyaConfig> = {}) {
-    this.config = resolveConfig(options);
-    this.http = new HttpClient(this.config);
-    this.environments = new EnvironmentsResource(this.http);
-    this.agents = new AgentsResource(this.http);
-    this.memory = new MemoryResource(this.http);
-    this.executions = new ExecutionsResource(this.http);
-    this.proofs = new ProofsResource(this.http);
-    this.apiKeys = new ApiKeysResource(this.http);
-    this.solana = new SolanaResource(this.http);
-    this.protection = new ProtectionResource(this.http);
-    this.compute = new DecentralizedComputeResource(this.http);
+  constructor(config: VeyaClientConfig = {}) {
+    this.config = resolveConfig(config);
+    const privateKey = config.payerPrivateKey ?? this.config.payerPrivateKey;
+    if (privateKey) {
+      this.evm = new EvmAnchor({
+        ...config,
+        payerPrivateKey: privateKey,
+      });
+    }
   }
 
-  /** Wallet sign-in; sets JWT on this client for later calls. */
-  async authWithWallet(input: WalletAuthInput) {
-    return walletAuth(this.http, input);
+  describe(): Record<string, unknown> {
+    return describeConfig(this.config);
   }
 
-  setAccessToken(token: string): void {
-    this.http.setAccessToken(token);
+  explorerFor(txHash: string): string {
+    return explorerTxUrl(txHash, this.config.explorerUrl);
   }
 
-  /** GET /health — no auth required. */
-  async health() {
-    return this.http.request<{
-      status: string;
-      database: string;
-      solana: {
-        cluster: string;
-        anchor: { configured: boolean; relayerPubkey: string | null; ready: boolean };
-      };
-    }>("/health", { auth: false });
+  async pingChain() {
+    const ping = await pingRpc(this.config.rpcUrl);
+    if (ping.chainId !== BigInt(this.config.chainId)) {
+      throw new VeyaSdkError("CHAIN_MISMATCH", "RPC chain id does not match SDK config", {
+        expected: this.config.chainId,
+        actual: ping.chainId.toString(),
+      });
+    }
+    return ping;
+  }
+
+  async pqKeygen() {
+    return pq.generatePQIdentity();
+  }
+
+  async hashBlake3(data: string | Uint8Array) {
+    return pq.hashBlake3(data);
+  }
+
+  requireEvm(): EvmAnchor {
+    if (!this.evm) {
+      throw new VeyaSdkError(
+        "MISSING_PAYER",
+        "payerPrivateKey required for on-chain ops on Robinhood Chain",
+      );
+    }
+    return this.evm;
+  }
+
+  async registerPqOnchain(envType = 1) {
+    return this.requireEvm().registerPqIdentity(envType);
+  }
+
+  async runConsensus(taskId: string, payload: object) {
+    return runConsensus(this.config.validatorNodes, taskId, payload, {
+      timeoutMs: this.config.requestTimeoutMs,
+    });
+  }
+
+  async protectedExecute(params: {
+    environmentId: string;
+    agentId: string;
+    eventType: string;
+    payload: object;
+    sessionEntropy: Uint8Array;
+  }) {
+    const result = await protectedExec(this.config.sealedNodeUrl, params, {
+      timeoutMs: this.config.requestTimeoutMs,
+    });
+    return requireVerifiedSeal(result);
+  }
+
+  async verifyTransaction(txHash: string) {
+    const { ethers } = await import("ethers");
+    const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
+    return parseProofFromTransaction(
+      provider,
+      txHash,
+      this.config.contractAddress,
+      this.config.explorerUrl,
+    );
   }
 }
