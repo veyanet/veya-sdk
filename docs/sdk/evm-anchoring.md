@@ -378,3 +378,130 @@ Event: `SpendingLimitInitialized`, `SpendRecorded`.
 
 ---
 
+## defineToolPolicy
+
+Defines which MCP tool names an agent may invoke. Tool names are limited to `MAX_TOOL_NAME_LEN` (64 bytes). The mapping key is `keccak256(abi.encodePacked(agentUuid, toolName))`.
+
+```typescript
+await anchor.defineToolPolicy(environmentUuid, agentUuid, "transfer_funds", true);
+await anchor.defineToolPolicy(environmentUuid, agentUuid, "external_api", false);
+```
+
+Only the environment owner may call this. The agent must exist and belong to that environment. Reverts: `EnvironmentDoesNotExist` (via modifier), `Unauthorized`, `AgentDoesNotExist`, `ToolNameTooLong`.
+
+The on-chain `allowed` bit is the dispute record. The in-process `setToolPolicy` map in `src/coordination/router.ts` is a fast pre-check and is not durable. Bootstrap it from `toolPolicies` at process start when operators need alignment.
+
+Event: `ToolPolicyUpdated(agentUuid, environmentUuid, toolName, allowed)`.
+
+---
+
+## flagMemoryNullifier
+
+Marks a memory id as spent-once.
+
+```typescript
+await anchor.flagMemoryNullifier(environmentUuid, memoryIdBytes16);
+```
+
+The environment must exist. A second flag for the same `memoryId` reverts `MemoryAlreadyNullified`. The mapping is keyed by `memoryId` alone (`mapping(bytes16 => Nullifier) public nullifiers`), so memory ids must be unique across environments in practice.
+
+Pair with local `invalidateMemory` in `src/memory/nullifier.ts`. Local-only invalidation does not prevent another operator from reading a copy of the payload; the chain flag is the cross-operator replay break.
+
+Event: `MemoryNullified(memoryId, environmentUuid)`.
+
+---
+
+## storeSealedState
+
+Stores a ciphertext chunk for data availability. Maximum chunk size is `MAX_SEALED_CHUNK` (8192 bytes).
+
+```typescript
+await anchor.storeSealedState(
+  environmentUuid,
+  stateId,
+  0, // chunkIndex
+  blake3CiphertextHash,
+  ciphertextChunk,
+);
+```
+
+Mapping key: `keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))`. Re-storing the same key overwrites the chunk and may bump `totalChunks` if `chunkIndex + 1` is larger than the stored total.
+
+The contract does not decrypt. It stores `blake3CiphertextHash` plus the raw chunk bytes. Auditors recompute BLAKE3 over the concatenated chunks and compare.
+
+Event: `SealedStateStored(stateId, environmentUuid, chunkIndex, totalChunks, blake3Hash)`.
+
+---
+
+## registerPqIdentity
+
+High-level helper used by `VeyaClient.registerPqOnchain()`. It generates an ML-DSA-44 identity, hashes the public key with BLAKE3, registers an environment, and anchors the hash as a commitment.
+
+```typescript
+const result = await anchor.registerPqIdentity(1);
+// {
+//   publicKey, publicKeyHash,
+//   environmentTx, memoTx,
+//   explorer: { environment, memo }
+// }
+```
+
+Flow:
+
+1. `pq.generatePQIdentity()`
+2. `pq.publicKeyHashBlake3(publicKey)`
+3. Random 16-byte UUID
+4. `registerEnvironment(uuid, hashBytes, envType)`
+5. `anchorMemo(uuid, hashHex)` via `storeCommitment`
+
+The private key is returned to the caller in memory from step 1 and is **not** written on chain. Persist it with the same care as `payerPrivateKey`. The helper does not register an agent; call `registerAgent` separately when the environment needs an actor.
+
+Default `envType` is `1` (`SecureEnclave`).
+
+---
+
+## Instruction Catalog
+
+**File:** `src/program/instructions.ts`
+
+```typescript
+export const INSTRUCTION_NAMES = [
+  "registerEnvironment",
+  "registerAgent",
+  "attestExecution",
+  "anchorPqAttestation",
+  "storeCommitment",
+  "initSpendingLimit",
+  "recordSpend",
+  "defineToolPolicy",
+  "flagMemoryNullifier",
+  "storeSealedState",
+] as const;
+```
+
+These names are camelCase and match `Veya.sol` function names and `VEYA_ABI` entries. Tests in `src/chain.test.ts` assert that every catalog name exists on the ABI and that `register_environment` does not. When adding a Solidity write, update this array, the ABI JSON, and `EvmAnchor` in the same change.
+
+Read methods such as `getEnvironment` are not in the catalog because they do not send transactions. `anchorMemo` and `registerPqIdentity` are SDK facades over catalog writes.
+
+---
+
+## Storage Layout vs PDAs
+
+`Veya.sol` uses mappings, not program-derived addresses.
+
+| Record | Key |
+|--------|-----|
+| `Environment` | `bytes16` uuid |
+| `Agent` | `bytes16` agentUuid |
+| `Attestation` | `keccak256(abi.encodePacked(authority, blake3Hash))` |
+| `PqAttestation` | `bytes32` executionHash |
+| `Commitment` | `bytes32` commitment |
+| `SpendingLimit` | `bytes16` agentUuid |
+| `ToolPolicy` | `keccak256(abi.encodePacked(agentUuid, toolName))` |
+| `Nullifier` | `bytes16` memoryId |
+| `SealedState` | `keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))` |
+
+Do not attempt to derive Solana-style seeds. When an explorer or indexer needs to find a tool policy, hash the packed agent UUID and tool name with keccak256, not BLAKE3. BLAKE3 is the commitment hash for payloads; keccak256 is only the EVM mapping key.
+
+---
+
