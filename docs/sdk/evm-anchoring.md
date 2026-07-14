@@ -233,3 +233,148 @@ If the contract reverts, ethers throws and `send` does not return a hash. Map re
 
 ---
 
+## registerEnvironment
+
+Creates an `Environment` record keyed by `bytes16 environmentUuid` with a PQ public-key hash.
+
+```typescript
+const uuid = crypto.getRandomValues(new Uint8Array(16));
+const pqHashHex = "e222a4812bace5608fd743318c2cb0f05cd8de4196f8cf09ffa195734c99d2a0";
+const pqHash = Uint8Array.from(Buffer.from(pqHashHex, "hex"));
+
+const tx = await anchor.registerEnvironment(uuid, pqHash, 1);
+// envType: 0=Execution, 1=SecureEnclave, 2=Governance
+```
+
+`ethers.hexlify` wraps the UUID and hash before the ABI encode. The Solidity signature is:
+
+```solidity
+function registerEnvironment(bytes16 environmentUuid, bytes32 pqPubkeyHash, uint8 envType) external;
+```
+
+| Solidity field | Type | Meaning |
+|----------------|------|---------|
+| `owner` | `address` | `msg.sender` (payer) |
+| `uuid` | `bytes16` | Stable environment id |
+| `pqPubkeyHash` | `bytes32` | BLAKE3 of ML-DSA-44 public key |
+| `envType` | `EnvironmentType` | 0 / 1 / 2 |
+| `createdAt` | `uint64` | `block.timestamp` |
+| `revision` | `uint32` | Starts at 1 |
+| `exists` | `bool` | Presence flag |
+
+Reverts: `InvalidEnvironmentType` if `envType > 2`, `EnvironmentAlreadyExists` if the UUID is taken. There is no PDA seed. The mapping key is the UUID itself: `environments[environmentUuid]`.
+
+Event: `EnvironmentRegistered(uuid, owner, pqPubkeyHash, envType)`.
+
+---
+
+## registerAgent
+
+Registers an agent under an existing environment. Only the environment owner may call it (`onlyEnvironmentOwner`).
+
+```typescript
+const agentUuid = crypto.getRandomValues(new Uint8Array(16));
+const tx = await anchor.registerAgent(envUuid, agentUuid, 0, agentPqHash);
+// agentRole: 0, 1, or 2
+```
+
+| Solidity field | Type | Meaning |
+|----------------|------|---------|
+| `environmentUuid` | `bytes16` | Parent environment |
+| `agentUuid` | `bytes16` | Agent id (mapping key) |
+| `role` | `uint8` | Must be `<= 2` |
+| `pqHash` | `bytes32` | BLAKE3 of agent ML-DSA public key |
+| `isActive` | `bool` | Starts true |
+| `createdAt` | `uint64` | `block.timestamp` |
+
+Reverts: `EnvironmentDoesNotExist`, `Unauthorized` (caller is not owner), `InvalidAgentRole`, `AgentAlreadyExists`.
+
+Event: `AgentRegistered(agentUuid, environmentUuid, role, pqHash)`.
+
+Agent UUIDs are globally keyed in `mapping(bytes16 => Agent) public agents`. Do not reuse an agent UUID across environments.
+
+---
+
+## storeCommitment and anchorMemo
+
+`storeCommitment` writes a 32-byte digest into `commitments[commitment]`. The mapping key is the commitment itself, so the same digest cannot be stored twice (`CommitmentAlreadyExists`).
+
+```typescript
+const tx = await anchor.storeCommitment(environmentUuid, commitmentBytes);
+```
+
+`anchorMemo` is a convenience that hex-decodes a BLAKE3 string and calls `storeCommitment`. It replaces the role that SPL Memo played on other stacks: a human-auditable 32-byte fingerprint on chain, without a separate memo program.
+
+```typescript
+const blake3Hex = "1f2f0fd6237e00d76bdf5ab61eb8edc85a265a42ec9f24f7554993daa5e9c9e3";
+const tx = await anchor.anchorMemo(environmentUuid, blake3Hex);
+```
+
+The environment must already exist. The authority recorded on the `Commitment` struct is `msg.sender`. Timestamp is `block.timestamp`.
+
+Event: `CommitmentStored(authority, environmentUuid, commitment)`.
+
+Because the mapping is keyed by the digest, two environments cannot share a commitment value. That is a protocol invariant: BLAKE3 collisions are treated as already-anchored facts, not as namespaced per environment.
+
+---
+
+## anchorPqAttestation
+
+Stores a pair `(identityHash, executionHash)` under `pqAttestations[executionHash]`.
+
+```typescript
+const tx = await anchor.anchorPqAttestation(
+  environmentUuid,
+  identityHashBytes,   // typically BLAKE3(ML-DSA pubkey)
+  executionHashBytes,  // typically agreed BLAKE3 from runConsensus
+);
+```
+
+The environment must exist. The same `executionHash` cannot be attested twice (`PqAttestationAlreadyExists`). This is the settlement step after a 2-of-3 validator quorum: the agreed hash becomes an on-chain fact bound to an identity hash.
+
+Event: `PqAttestationAnchored(authority, environmentUuid, identityHash, executionHash)`.
+
+Off-chain verifiers should still run `verifyPQ` on the node signatures. The contract does not check ML-DSA; it only records that the payer asserted these two 32-byte values.
+
+---
+
+## attestExecution
+
+Stores an execution attestation keyed by `keccak256(abi.encodePacked(msg.sender, blake3Hash))`.
+
+```typescript
+const tx = await anchor.attestExecution(environmentUuid, blake3Hash, mldsaSigBytes);
+```
+
+`mldsaSig` is `bytes` with a maximum length of `MAX_MLDSA_SIG_LEN` (4627). The contract does not verify the signature. Empty signatures are allowed by length but are operationally useless for auditors.
+
+Reverts: `EnvironmentDoesNotExist`, `SignatureTooLarge`, `AttestationAlreadyExists` for the same `(authority, blake3Hash)` pair.
+
+Event: `ExecutionAttested(authority, environmentUuid, blake3Hash)`.
+
+Use this after sealed execution or consensus when the operator wants the ML-DSA bytes themselves on chain. Use `anchorPqAttestation` when only the identity and execution hashes are required.
+
+---
+
+## Spending in Wei
+
+Spending is **wei**, not lamports. `Veya.sol` comments and struct fields use `uint256 maxAmount` / `spentAmount`. The SDK policy field is `PolicyAgentConfig.maxWeiPerAction`.
+
+```typescript
+const maxWei = 10n ** 16n; // 0.01 ETH
+const periodSecs = 86_400;
+await anchor.initSpendingLimit(agentUuid, maxWei, periodSecs);
+
+await anchor.recordSpend(agentUuid, 10n ** 15n); // 0.001 ETH
+```
+
+`initSpendingLimit` requires `onlyAgentEnvironmentOwner`: the caller must own the environment that contains the agent. It reverts `SpendingLimitAlreadyExists` if the agent already has a cap.
+
+`recordSpend` rolls the window when `block.timestamp >= periodStart + periodSecs`, then adds `amount` and reverts `SpendingLimitExceeded` if `spentAmount + amount > maxAmount`. There is no on-chain transfer of ETH inside these functions. They are accounting hooks. Actual value movement is an application concern; VEYA records the cap.
+
+Local SDK `src/spending/limits.ts` mirrors the same wei arithmetic in-process so `PolicyAgent` can deny a tool call before gas is spent. Keep the local cap and the on-chain cap aligned. Mixing wei on chain with some other unit in the policy agent will produce inconsistent denials.
+
+Event: `SpendingLimitInitialized`, `SpendRecorded`.
+
+---
+
