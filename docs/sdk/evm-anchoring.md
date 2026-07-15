@@ -505,3 +505,132 @@ Do not attempt to derive Solana-style seeds. When an explorer or indexer needs t
 
 ---
 
+## Reads
+
+```typescript
+const env = await anchor.getEnvironment(environmentUuid);
+```
+
+This calls the public mapping getter `environments(bytes16)`. It does not go through `send` and therefore does **not** call `ensureRobinhoodChain`. A read against the wrong chain will return empty structs (`exists == false`) rather than throw. Operators who need a read-time pin should call `ensureRobinhoodChain()` explicitly before batch reads.
+
+Other mappings (`agents`, `commitments`, `spendingLimits`, and so on) are public on the contract. Integrators may bind additional getters with the same `VEYA_ABI` without extending `EvmAnchor`. Prefer that over adding ad-hoc RPC `eth_call` payloads.
+
+---
+
+## Error Handling
+
+`src/errors/veya-error.ts` maps Solidity custom-error selectors to `VeyaErrorCode`:
+
+| Selector | Code |
+|----------|------|
+| `0x145718a7` | `COMMITMENT_EXISTS` |
+| `0xb6d54abb` | `ENVIRONMENT_EXISTS` |
+| `0xb90193fa` | `ENVIRONMENT_MISSING` |
+| `0x631ecd51` | `ATTESTATION_EXISTS` |
+| `0x2d37333f` | `PQ_ATTESTATION_EXISTS` |
+| `0x8a9e71ea` | `SPENDING_EXCEEDED` |
+
+Unknown selectors become `ANCHOR_REVERT` with raw data attached. Call `fromAnchorRevert(err)` in application catch blocks. Branch on `code`, not on `message` substrings.
+
+`CHAIN_MISMATCH` is reserved for typed wrapping of the `ensureRobinhoodChain` throw. Today the method throws a plain `Error`; operators may wrap it at the application boundary.
+
+---
+
+## Failure Modes and Recovery
+
+| Failure | Cause | Recovery |
+|---------|-------|----------|
+| Chain id mismatch | RPC is not Robinhood Chain 46630 (or configured id) | Fix RPC; reconstruct `EvmAnchor` |
+| `transaction mined without a hash` | Receipt missing hash | Inspect RPC; resubmit only if the nonce did not consume |
+| `EnvironmentAlreadyExists` | UUID collision | Generate a new 16-byte UUID |
+| `CommitmentAlreadyExists` | Same 32-byte digest already stored | Treat as already anchored; do not retry |
+| `SpendingLimitExceeded` | `amount` in wrong units or cap too low | Confirm wei; widen cap via a new agent or a future upgrade |
+| `SignatureTooLarge` | ML-DSA bytes exceeded 4627 | Confirm ML-DSA-44 encoding; do not pass concatenated sigs |
+| `SealedChunkTooLarge` | Chunk > 8192 | Split ciphertext; increment `chunkIndex` |
+| `Unauthorized` | Payer is not environment owner | Use the registering key |
+| ABI / selector mismatch | `Veya.json` out of date | Regen ABI from the deployed compiler artifact |
+| Insufficient ETH | Payer cannot pay gas | Fund the payer in wei on Robinhood Chain |
+| Wrong contract address | Config points at empty or unrelated code | Pin `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on testnet |
+
+Retries after a successful mine must not reuse the same unique keys (UUID, commitment digest, execution hash). Idempotent application wrappers should first read the mapping and skip the write when `exists` is already true.
+
+---
+
+## Security and Trust Boundaries
+
+The payer key is `msg.sender` for every write. Compromise of `VEYA_DEPLOYER_PRIVATE_KEY` allows registering environments, flagging nullifiers, and attesting hashes that auditors will treat as authoritative for that address. Rotate by abandoning the address; there is no on-chain key-rotation instruction.
+
+The RPC can lie about receipts. After a write, confirm the hash on `https://explorer.testnet.chain.robinhood.com/tx/<hash>` or via a second provider. `ensureRobinhoodChain` prevents accidental cross-chain writes; it does not prevent a malicious RPC on the correct chain id.
+
+ML-DSA bytes on chain are claims. Anyone can submit arbitrary bytes within the length cap. Trust comes from off-chain `verifyPQ` against a known public key whose BLAKE3 hash was registered in the environment record.
+
+Spending functions do not move ETH. An application that treats `recordSpend` as a transfer will leak value. Keep value transfer in a separate, audited path and use VEYA accounting as a policy log.
+
+---
+
+## Worked Example
+
+End-to-end identity plus commitment on Robinhood Chain testnet:
+
+```typescript
+import { VeyaClient, ROBINHOOD_TESTNET } from "@veya/sdk";
+
+const client = new VeyaClient({
+  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
+  rpcUrl: ROBINHOOD_TESTNET.rpcUrl,
+  chainId: ROBINHOOD_TESTNET.chainId,
+  contractAddress: ROBINHOOD_TESTNET.contractAddress,
+  explorerUrl: ROBINHOOD_TESTNET.explorerUrl,
+});
+
+const { publicKeyHash, environmentTx, memoTx, explorer } =
+  await client.registerPqOnchain(1);
+
+console.log("environment", explorer.environment);
+console.log("commitment", explorer.memo);
+console.log("pq hash", publicKeyHash);
+```
+
+After this returns, both hashes are visible on the explorer. Fund the payer with testnet ETH first. Gas is paid in wei. If `ensureRobinhoodChain` throws, the RPC is not chain `46630` and no transaction was sent.
+
+A follow-up spend cap for a registered agent:
+
+```typescript
+import { ethers } from "ethers";
+
+const agentUuid = crypto.getRandomValues(new Uint8Array(16));
+await client.evm!.registerAgent(envUuid, agentUuid, 0, agentPqHash);
+await client.evm!.initSpendingLimit(
+  agentUuid,
+  ethers.parseEther("0.05"),
+  86_400,
+);
+```
+
+`parseEther` yields wei. Passing `50_000_000` as if it were lamports would set a cap of 5e7 wei, which is a tiny fraction of one ETH.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Expected chain id 46630 | RPC on another EVM | Use `https://rpc.testnet.chain.robinhood.com` |
+| `payerPrivateKey required` | Constructed `VeyaClient` without a key | Set `VEYA_DEPLOYER_PRIVATE_KEY` |
+| Invalid private key | Solana JSON array supplied | Use hex secp256k1 |
+| Environment explorer 404 | Hash missing `0x` and helper bypassed | Use `explorerFor` / `explorerTxUrl` |
+| Revert `SpendingLimitExceeded` | Units not wei | `ethers.parseEther` / `maxWeiPerAction` |
+| Revert `CommitmentAlreadyExists` | Duplicate digest | Skip; already anchored |
+| ABI test fails snake_case | Catalog drifted | Restore camelCase `INSTRUCTION_NAMES` |
+| Empty `getEnvironment` | Wrong chain or UUID | Call `ensureRobinhoodChain`; confirm UUID bytes |
+
+---
+
+## See Also
+
+- [configuration.md](./configuration.md): `resolveConfig`, env vars, chain defaults
+- [pq-crypto.md](./pq-crypto.md): ML-DSA-44 and BLAKE3 used before writes
+- [decentralized-compute.md](./decentralized-compute.md): hashes that feed `anchorPqAttestation`
+- [sealed-execution.md](./sealed-execution.md): chunks that feed `storeSealedState`
+- [coordination.md](./coordination.md): `defineToolPolicy` alignment
+- [memory.md](./memory.md): `flagMemoryNullifier` pairing
