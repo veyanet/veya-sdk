@@ -676,3 +676,39 @@ sealedStates(bytes32) → SealedState tuple
 
 ---
 
+## What This Contract Is Not
+
+| Claim | Reality |
+|-------|---------|
+| ERC-20 | No `transfer` / `balanceOf` / `approve` |
+| ERC-721 | No token ids as NFTs |
+| Upgradeable proxy | Implementation address is the protocol |
+| Solana program | 20-byte EVM address, calldata, gas |
+| Brokerage API | No Robinhood trading endpoints |
+| PQ verifier | Stores bytes; does not run Dilithium |
+
+Integrators who search for a “VEYA token address” are looking at the wrong artifact. Use `ROBINHOOD_TESTNET.contractAddress` only as a **protocol** address.
+
+---
+
+## Testing
+
+| Suite | Command |
+|-------|---------|
+| SDK ABI names | `npm install && npm test` (`INSTRUCTION_NAMES` ⊂ ABI) |
+| SDK types | `npm run lint` |
+| Operator RPC | `npx tsx scripts/live-rpc.ts` |
+| Optional write | funded `registerPqOnchain` |
+
+After any Solidity edit, refresh `src/abi/Veya.json` before claiming the SDK talks to the new bytecode.
+
+---
+
+## See Also
+
+| Guide | Description |
+|-------|-------------|
+| [storage-layouts.md](./storage-layouts.md) | Slots, packing, keccak keys |
+| [types-reference.md](../api/types-reference.md) | TypeScript mirrors |
+| [DEPLOYMENT.md](../DEPLOYMENT.md) | Testnet consume / redeploy |
+| [CLI.md](../CLI.md) | Node operator surface |
