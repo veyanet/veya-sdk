@@ -344,3 +344,225 @@ both records share environmentUuid
 
 ---
 
+## Commitment Function
+
+### 5. `storeCommitment`
+
+Store a standalone BLAKE3 result commitment.
+
+```solidity
+function storeCommitment(
+    bytes16 environmentUuid,
+    bytes32 commitment
+) external;
+```
+
+#### Mapping key
+
+The `commitment` bytes32 (`commitments[commitment]`). Duplicate digest reverts `CommitmentAlreadyExists`.
+
+#### SDK helper `anchorMemo`
+
+```typescript
+await evm.anchorMemo(envUuid, blake3Hex); // decodes hex → storeCommitment
+```
+
+This is **not** an external memo program. It is a named helper around `storeCommitment` used by `registerPqIdentity` to persist the pubkey fingerprint a second time as a commitment row.
+
+---
+
+## Spending Functions
+
+### 6. `initSpendingLimit`
+
+Configure a per-agent **wei** spending cap for treasury-style flows.
+
+```solidity
+function initSpendingLimit(
+    bytes16 agentUuid,
+    uint256 maxAmount,
+    uint64 periodSecs
+) external onlyAgentEnvironmentOwner(agentUuid);
+```
+
+#### Arguments
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agentUuid` | `bytes16` | Target agent |
+| `maxAmount` | `uint256` | Maximum spend per period, **wei** |
+| `periodSecs` | `uint64` | Rolling window duration |
+
+#### Access
+
+Agent must exist; `msg.sender` must own the agent’s environment.
+
+#### Effects
+
+- `spentAmount = 0`
+- `periodStart = block.timestamp`
+- One limit per `agentUuid`
+- Emits `SpendingLimitInitialized`
+
+Duplicate init reverts `SpendingLimitAlreadyExists`.
+
+---
+
+### 7. `recordSpend`
+
+Increment the spent counter against the agent cap.
+
+```solidity
+function recordSpend(bytes16 agentUuid, uint256 amount) external;
+```
+
+Anyone may call; the cap is the protection, not a signature ACL on the spender. Application-layer auth (PolicyAgent, consensus) should run **before** this call.
+
+#### Period rollover
+
+```
+if (nowSecs >= periodStart + periodSecs) {
+    spentAmount = 0;
+    periodStart = nowSecs;
+}
+next = spentAmount + amount;
+if (next > maxAmount) revert SpendingLimitExceeded();
+spentAmount = next;
+```
+
+Addition is unchecked-overflow-safe in 0.8 (`+` reverts on overflow). Exceeding `maxAmount` uses the custom error.
+
+#### Example
+
+```
+initSpendingLimit(agent, 1_000_000_000_000_000_000, 86400)  // 1 ETH / day
+recordSpend(agent, 500_000_000_000_000_000)                 // 0.5 ETH OK
+recordSpend(agent, 600_000_000_000_000_000)                 // SpendingLimitExceeded
+```
+
+SDK: `evm.recordSpend(agentUuid, amountWei)` with `bigint`. In-process `recordSpend(env, agent, amount)` in `src/spending/limits.ts` is a **separate** pre-check and does not substitute for the chain call.
+
+---
+
+## Policy Function
+
+### 8. `defineToolPolicy`
+
+Define which MCP tools an agent may invoke within an environment.
+
+```solidity
+function defineToolPolicy(
+    bytes16 environmentUuid,
+    bytes16 agentUuid,
+    string calldata toolName,
+    bool allowed
+) external onlyEnvironmentOwner(environmentUuid);
+```
+
+#### Mapping key
+
+```
+keccak256(abi.encodePacked(agentUuid, toolName))
+```
+
+This function **upserts**. Updating `allowed` on an existing tool is permitted.
+
+#### Errors
+
+| Error | Condition |
+|-------|-----------|
+| `EnvironmentDoesNotExist` / `Unauthorized` | modifier |
+| `AgentDoesNotExist` | unknown agent |
+| `Unauthorized` | `agents[agent].environmentUuid != environmentUuid` |
+| `ToolNameTooLong` | UTF-8 length > 64 |
+
+#### Example tools
+
+| `toolName` | Typical `allowed` |
+|-------------|-------------------|
+| `mcp_transfer` | `false` on high-risk envs |
+| `mcp_read_balance` | `true` |
+| `mcp_policy_eval` | `true` for policy role |
+
+SDK in-memory `setToolPolicy` must stay aligned with this mapping in production.
+
+---
+
+## Memory Function
+
+### 9. `flagMemoryNullifier`
+
+Mark a memory entry as nullified (spend-once semantics).
+
+```solidity
+function flagMemoryNullifier(
+    bytes16 environmentUuid,
+    bytes16 memoryId
+) external;
+```
+
+#### Mapping key
+
+`memoryId` (`nullifiers[memoryId]`).
+
+If `nullifiers[memoryId].nullified` is already true, revert `MemoryAlreadyNullified`. Environment must exist. Caller is not required to be owner (application should gate this).
+
+#### Effects
+
+- `nullified = true`
+- `nullifiedAt = block.timestamp`
+- Emits `MemoryNullified`
+
+Local SDK `invalidateMemory` only flips `~/.veya/agent-memory.json`. Call this function to make the nullifier auditable on Robinhood Chain.
+
+---
+
+## Sealed State Function
+
+### 10. `storeSealedState`
+
+Store a chunk of sealed ciphertext for data availability.
+
+```solidity
+function storeSealedState(
+    bytes16 environmentUuid,
+    bytes16 stateId,
+    uint16 chunkIndex,
+    bytes32 blake3CiphertextHash,
+    bytes calldata ciphertextChunk
+) external;
+```
+
+Unlike some other chains’ programs, **the client supplies** `blake3CiphertextHash`. Auditors must recompute BLAKE3 over `ciphertextChunk` and compare; the contract does not hash in-EVM.
+
+#### Mapping key
+
+```
+keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))
+```
+
+#### Errors
+
+| Error | Condition |
+|-------|-----------|
+| `EnvironmentDoesNotExist` | env missing |
+| `SealedChunkTooLarge` | `ciphertextChunk.length > 8192` |
+
+#### totalChunks
+
+If the slot already exists, previous `totalChunks` is read; then `totalChunks = max(prev, chunkIndex + 1)` (with the `chunkIndex + 1 > totalChunks` branch). Re-storing a chunk **overwrites** ciphertext.
+
+#### Multi-chunk pattern
+
+```typescript
+for (let i = 0; i < chunks.length; i++) {
+  const h = await client.hashBlake3(chunks[i]);
+  const hashBytes = Uint8Array.from(Buffer.from(h, "hex"));
+  await evm.storeSealedState(envUuid, stateId, i, hashBytes, chunks[i]);
+}
+```
+
+Decrypt only at the sealed-node boundary after hash checks.
+
+---
+
