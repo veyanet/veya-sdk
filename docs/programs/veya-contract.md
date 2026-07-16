@@ -566,3 +566,113 @@ Decrypt only at the sealed-node boundary after hash checks.
 
 ---
 
+## Events
+
+| Event | Indexed | When |
+|-------|---------|------|
+| `EnvironmentRegistered(uuid, owner, pqPubkeyHash, envType)` | uuid, owner | register env |
+| `AgentRegistered(agentUuid, environmentUuid, role, pqHash)` | agent, env | register agent |
+| `ExecutionAttested(authority, environmentUuid, blake3Hash)` | authority, env | attest |
+| `PqAttestationAnchored(authority, environmentUuid, identityHash, executionHash)` | authority, env | PQ link |
+| `CommitmentStored(authority, environmentUuid, commitment)` | authority, env | commit |
+| `SpendingLimitInitialized(agentUuid, maxAmount, periodSecs)` | agent | init cap |
+| `SpendRecorded(agentUuid, amount, spentAmount)` | agent | spend |
+| `ToolPolicyUpdated(agentUuid, environmentUuid, toolName, allowed)` | agent, env | policy |
+| `MemoryNullified(memoryId, environmentUuid)` | memory, env | nullifier |
+| `SealedStateStored(stateId, environmentUuid, chunkIndex, totalChunks, blake3Hash)` | state, env | sealed chunk |
+
+Indexers should subscribe to these topics rather than scanning storage. Explorer pages for a tx list the events in the receipt logs.
+
+---
+
+## Error Taxonomy
+
+| Error | Typical function |
+|-------|------------------|
+| `InvalidEnvironmentType` | `registerEnvironment` |
+| `InvalidAgentRole` | `registerAgent` |
+| `EnvironmentAlreadyExists` | `registerEnvironment` |
+| `EnvironmentDoesNotExist` | most writes that require an env |
+| `AgentAlreadyExists` | `registerAgent` |
+| `AgentDoesNotExist` | policy / spend owner checks |
+| `Unauthorized` | owner modifiers / agent-env mismatch |
+| `SignatureTooLarge` | `attestExecution` |
+| `AttestationAlreadyExists` | `attestExecution` |
+| `PqAttestationAlreadyExists` | `anchorPqAttestation` |
+| `CommitmentAlreadyExists` | `storeCommitment` |
+| `SpendingLimitAlreadyExists` | `initSpendingLimit` |
+| `SpendingLimitDoesNotExist` | `recordSpend` |
+| `SpendingLimitExceeded` | `recordSpend` |
+| `ToolNameTooLong` | `defineToolPolicy` |
+| `MemoryAlreadyNullified` | `flagMemoryNullifier` |
+| `SealedChunkTooLarge` | `storeSealedState` |
+
+ethers v6 surfaces these as custom errors. `fromAnchorRevert` maps a subset of selectors to `VeyaSdkError.code`.
+
+---
+
+## Modifiers
+
+### `onlyEnvironmentOwner(bytes16 environmentUuid)`
+
+1. `environments[uuid].exists` else `EnvironmentDoesNotExist`
+2. `owner == msg.sender` else `Unauthorized`
+
+Used by `registerAgent`, `defineToolPolicy`.
+
+### `onlyAgentEnvironmentOwner(bytes16 agentUuid)`
+
+1. Agent exists else `AgentDoesNotExist`
+2. Load `envUuid = agents[agentUuid].environmentUuid`
+3. `environments[envUuid].owner == msg.sender` else `Unauthorized`
+
+Used by `initSpendingLimit`.
+
+There is **no** `onlyOwner` for the whole contract. There is no admin key and no pause switch in v1.
+
+---
+
+## SDK Mapping
+
+| Off-chain | On-chain function |
+|-----------|-------------------|
+| `VeyaClient.pqKeygen` | none (local) |
+| `VeyaClient.registerPqOnchain` | `registerEnvironment` + `storeCommitment` |
+| `EvmAnchor.registerAgent` | `registerAgent` |
+| `runConsensus` → agreed hash | `attestExecution` |
+| `protectedExec` → ciphertext | `storeSealedState` |
+| `setToolPolicy` (memory) | `defineToolPolicy` |
+| `invalidateMemory` (JSON) | `flagMemoryNullifier` |
+| `setSpendingLimit` (process) | `initSpendingLimit` |
+| `recordSpend` (process) | `recordSpend` (chain) |
+
+| Layer | PQ operation |
+|-------|----------------|
+| `pq.generatePQIdentity` | No transaction |
+| `registerPqOnchain` | Two transactions |
+| Auditor | `verifyPQ` off-chain |
+
+Optional Rust `veya-cli` in `cli` talks to the same validator/sealed HTTP contracts; it does not replace `EvmAnchor` for Robinhood Chain writes in this package.
+
+---
+
+## Views and Constants
+
+Public mappings generate getters:
+
+```
+environments(bytes16) → Environment tuple
+agents(bytes16) → Agent tuple
+attestations(bytes32) → Attestation tuple (mldsaSig as bytes)
+pqAttestations(bytes32) → PqAttestation tuple
+commitments(bytes32) → Commitment tuple
+spendingLimits(bytes16) → SpendingLimit tuple
+toolPolicies(bytes32) → ToolPolicy tuple
+nullifiers(bytes16) → Nullifier tuple
+sealedStates(bytes32) → SealedState tuple
+```
+
+`EvmAnchor.getEnvironment` is a typed convenience for the first getter. Other getters are available via `evm.contract.<name>(key)`.
+
+---
+
