@@ -268,3 +268,332 @@ Maximum `mldsaSig` length is 4627 (`MAX_MLDSA_SIG_LEN`). Typical ML-DSA-44 detac
 
 ---
 
+## PqAttestation
+
+**Mapping:** `pqAttestations[bytes32]`  
+**Base slot:** 3  
+**Key:** `executionHash`
+
+```solidity
+struct PqAttestation {
+    address authority;
+    bytes16 environmentUuid;
+    bytes32 identityHash;
+    bytes32 executionHash;
+    uint64 timestamp;
+    bool exists;
+}
+```
+
+All fields are static.
+
+| Relative slot | Contents |
+|---------------|----------|
+| 0 | `authority` (20) + padding |
+| 1 | `environmentUuid` (16) + padding |
+| 2 | `identityHash` (32) |
+| 3 | `executionHash` (32) |
+| 4 | `timestamp` (8) + `exists` (1) + padding |
+
+Links a PQ identity fingerprint to an execution commitment. One row per `executionHash` globally.
+
+---
+
+## Commitment
+
+**Mapping:** `commitments[bytes32]`  
+**Base slot:** 4  
+**Key:** the commitment digest itself
+
+```solidity
+struct Commitment {
+    address authority;
+    bytes16 environmentUuid;
+    bytes32 commitment;
+    uint64 timestamp;
+    bool exists;
+}
+```
+
+| Relative slot | Contents |
+|---------------|----------|
+| 0 | `authority` (20) + padding |
+| 1 | `environmentUuid` (16) + padding |
+| 2 | `commitment` (32) |
+| 3 | `timestamp` (8) + `exists` (1) + padding |
+
+`EvmAnchor.anchorMemo` writes this row. Duplicate key reverts `CommitmentAlreadyExists`.
+
+---
+
+## SpendingLimit
+
+**Mapping:** `spendingLimits[bytes16]`  
+**Base slot:** 5  
+**Key:** `agentUuid`
+
+```solidity
+struct SpendingLimit {
+    bytes16 agentUuid;
+    uint256 maxAmount;   // wei
+    uint64 periodSecs;
+    uint256 spentAmount; // wei
+    uint64 periodStart;
+    bool exists;
+}
+```
+
+| Relative slot | Contents |
+|---------------|----------|
+| 0 | `agentUuid` (16) + padding |
+| 1 | `maxAmount` (32): full word `uint256` |
+| 2 | `periodSecs` (8) + padding (next field is `uint256`) |
+| 3 | `spentAmount` (32) |
+| 4 | `periodStart` (8) + `exists` (1) + padding |
+
+### Period rollover (`recordSpend`)
+
+```
+if now >= periodStart + periodSecs:
+    spentAmount = 0
+    periodStart = now
+spentAmount += amount   // revert SpendingLimitExceeded if > maxAmount
+```
+
+One spending limit per agent. Units are **wei** of native ETH on Robinhood Chain.
+
+---
+
+## ToolPolicy
+
+**Mapping:** `toolPolicies[bytes32]`  
+**Base slot:** 6  
+**Key:** `keccak256(abi.encodePacked(agentUuid, toolName))`
+
+```solidity
+struct ToolPolicy {
+    bytes16 environmentUuid;
+    bytes16 agentUuid;
+    string toolName;
+    bool allowed;
+    uint64 updatedAt;
+    bool exists;
+}
+```
+
+`string toolName` is dynamic (max 64 bytes enforced in the function, not in the type). Decode via the getter.
+
+`defineToolPolicy` **overwrites** an existing key (upsert). There is no “policy already exists” error.
+
+Seed/key note: packed UTF-8 of `toolName` is part of the key. Two names that ABI-encode identically collide; keep names unique per agent.
+
+---
+
+## Nullifier
+
+**Mapping:** `nullifiers[bytes16]`  
+**Base slot:** 7  
+**Key:** `memoryId`
+
+```solidity
+struct Nullifier {
+    bytes16 environmentUuid;
+    bytes16 memoryId;
+    bool nullified;
+    uint64 nullifiedAt;
+    bool exists;
+}
+```
+
+| Relative slot | Contents |
+|---------------|----------|
+| 0 | `environmentUuid` (16) + `memoryId` (16) |
+| 1 | `nullified` (1) + `nullifiedAt` (8) + `exists` (1) + padding |
+
+If `nullified` is already true, `flagMemoryNullifier` reverts `MemoryAlreadyNullified`. The function checks `.nullified`, not only `.exists`.
+
+---
+
+## SealedState
+
+**Mapping:** `sealedStates[bytes32]`  
+**Base slot:** 8  
+**Key:** `keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))`
+
+```solidity
+struct SealedState {
+    address authority;
+    bytes16 environmentUuid;
+    bytes16 stateId;
+    uint16 chunkIndex;
+    uint16 totalChunks;
+    bytes32 blake3CiphertextHash;
+    bytes ciphertext;
+    uint64 storedAt;
+    bool exists;
+}
+```
+
+Static prefix packs as:
+
+- Slot 0: `authority` (20) + padding
+- Slot 1: `environmentUuid` (16) + `stateId` (16)
+- Slot 2: `chunkIndex` (2) + `totalChunks` (2) + padding (next is `bytes32`)
+- Slot 3: `blake3CiphertextHash` (32)
+- Then dynamic `ciphertext` + `storedAt` + `exists`
+
+`ciphertext` ≤ 8192 bytes. **Hash is client-supplied**; recompute off-chain:
+
+```
+blake3(ciphertextChunk) == blake3CiphertextHash
+```
+
+### Multi-chunk assembly
+
+| Field | Purpose |
+|-------|---------|
+| `stateId` | Groups chunks |
+| `chunkIndex` | Order for reassembly |
+| `totalChunks` | High-water mark (`max(prev, index+1)`) |
+
+Re-writing the same `(env, stateId, chunkIndex)` overwrites the chunk.
+
+---
+
+## Constants (not in storage)
+
+| Name | Value | Bytecode |
+|------|-------|----------|
+| `MAX_MLDSA_SIG_LEN` | 4627 | `public constant` |
+| `MAX_SEALED_CHUNK` | 8192 | `public constant` |
+| `MAX_TOOL_NAME_LEN` | 64 | `public constant` |
+
+These do not consume slots 0–8. Call them as views from ethers if an operator wants to confirm they are talking to Veya bytecode.
+
+---
+
+## Calldata Encoding
+
+`EvmAnchor` uses `ethers.hexlify` on `Uint8Array` uuid/hash arguments.
+
+| Solidity type | Calldata | SDK |
+|---------------|----------|-----|
+| `bytes16` | 32-byte ABI word, value right-aligned / hexlified 16 bytes | `hexlify(uuid)` |
+| `bytes32` | 32-byte word | `hexlify(hash)` |
+| `uint8` | 32-byte word | JS `number` |
+| `uint16` | 32-byte word | JS `number` (`chunkIndex`) |
+| `uint64` | 32-byte word | JS `number` (`periodSecs`) |
+| `uint256` | 32-byte word | JS `bigint` (wei) |
+| `bool` | 32-byte word | JS `boolean` |
+| `string` | offset + length + bytes | JS `string` |
+| `bytes` | offset + length + bytes | `Uint8Array` sig or chunk |
+
+Function selectors are the first four bytes of `keccak256(signature)`. Example: `registerEnvironment(bytes16,bytes32,uint8)`. ABI JSON in `src/abi/Veya.json` is the source of truth for selectors.
+
+---
+
+## Gas Implications
+
+| Write | Storage pattern | Relative cost |
+|-------|-----------------|---------------|
+| `registerEnvironment` | One new `Environment` (SSTORE zeros → nonzero) | Moderate |
+| `registerAgent` | One new `Agent` | Moderate |
+| `storeCommitment` | One new `Commitment` | Moderate |
+| `attestExecution` | Struct + dynamic bytes up to 4627 | High |
+| `storeSealedState` | Dynamic bytes up to 8192 | Highest |
+| `recordSpend` | Updates `spentAmount` / maybe `periodStart` | Lower (warm SSTORE) |
+| `defineToolPolicy` | Upsert including string | Moderate |
+
+Warm vs cold access (EIP-2929) matters on replay of the same keys. First touch of a mapping key is more expensive.
+
+There is **no rent** concept. Storage stays until a future version adds clearing (v1 does not delete rows). Failed transactions revert all SSTOREs.
+
+Fund the payer for several large `attestExecution` calls, not only tiny uuid writes. See [DEPLOYMENT.md](../DEPLOYMENT.md#gas-and-funding).
+
+---
+
+## Reading Storage from the SDK
+
+### Preferred: ABI getters
+
+```typescript
+import { EvmAnchor } from "@veya/sdk";
+
+const evm = new EvmAnchor({ payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY! });
+const env = await evm.getEnvironment(envUuid);
+// env.exists, env.owner, env.pqPubkeyHash, ...
+```
+
+Without a payer, construct a read-only `ethers.Contract` with `VEYA_ABI` and a `JsonRpcProvider` (no wallet).
+
+### Explorer
+
+```
+https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
+```
+
+Contract pages show verified source when published; logs still decode from the SDK ABI even if the explorer has not verified source.
+
+### Raw `eth_getStorageAt`
+
+Use only for incident response. Compute `keccak256(abi.encode(key, slot))` with the same padding as the Solidity compiler. Dynamic `bytes` require a second keccak. Prefer getters.
+
+```mermaid
+flowchart LR
+    RPC["eth_call getter"] --> ABI["ethers Result tuple"]
+    ABI --> APP["VeyaClient / indexer"]
+```
+
+---
+
+## Cross-Reference: Local Store
+
+`~/.veya/agent-memory.json` mirrors **logical** memory fields. It is **not** byte-compatible with EVM storage.
+
+| Local JSON | On-chain |
+|------------|----------|
+| `entries[env:id].blake3ContentHash` (hex string) | not stored; nullifier only |
+| `nullified` boolean | `nullifiers[memoryId].nullified` |
+| UUID strings | `bytes16` |
+| In-process `SpendingLimit` | `spendingLimits[agentUuid]` wei |
+
+Sync via SDK workflows. Never copy JSON into calldata without converting ids to 16-byte arrays and hashes to 32-byte arrays.
+
+| Operation | Tool |
+|-----------|------|
+| Create local memory | `storeMemory` |
+| Nullify locally | `invalidateMemory` |
+| Nullify on-chain | `EvmAnchor.flagMemoryNullifier` |
+| Create env on-chain | `registerEnvironment` / `registerPqOnchain` |
+
+---
+
+## Invariants
+
+| Invariant | Enforcement |
+|-----------|-------------|
+| Environment uuid unique | `EnvironmentAlreadyExists` |
+| Agent uuid unique | `AgentAlreadyExists` |
+| Attestation unique per (authority, hash) | `AttestationAlreadyExists` |
+| PQ attestation unique per execution hash | `PqAttestationAlreadyExists` |
+| Commitment digest unique | `CommitmentAlreadyExists` |
+| Spend cannot exceed cap in period | `SpendingLimitExceeded` |
+| Tool names ≤ 64 bytes | `ToolNameTooLong` |
+| Sealed chunk ≤ 8192 | `SealedChunkTooLarge` |
+| Sig ≤ 4627 | `SignatureTooLarge` |
+| envType ∈ {0,1,2} | `InvalidEnvironmentType` |
+| agentRole ∈ {0,1,2} | `InvalidAgentRole` |
+| Agent belongs to env for policy | `Unauthorized` if mismatch |
+
+`exists == false` means the slot is unused. After a successful register, `exists` stays true; v1 has no delete.
+
+---
+
+## See Also
+
+| Guide | Description |
+|-------|-------------|
+| [veya-contract.md](./veya-contract.md) | All 10 functions, events, errors |
+| [types-reference.md](../api/types-reference.md) | TypeScript types including `InstructionName` |
+| [DEPLOYMENT.md](../DEPLOYMENT.md) | Testnet address and gas funding |
+| [README.md](../README.md) | Documentation hub |
