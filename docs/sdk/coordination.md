@@ -322,3 +322,194 @@ This does not call `runConsensus`. It only decides whether the application must.
 
 ---
 
+## Wei Spending Gates
+
+**File:** `src/spending/limits.ts`
+
+Local state:
+
+```typescript
+export type SpendingLimit = {
+  agentId: string;
+  environmentId: string;
+  maxAmount: bigint | number;
+  periodSecs: number;
+  spentAmount: bigint | number;
+  periodStart: number;
+};
+```
+
+`setSpendingLimit` initializes `spentAmount` to 0 and `periodStart` to now (unix seconds). `recordSpend` rolls the window, adds the amount, and throws if the next spent value exceeds `maxAmount`. `checkSpendAllowed` is the non-mutating preview used by `PolicyAgent`.
+
+Keying is `environmentId:agentId`, unlike on-chain `spendingLimits[agentUuid]` which is agent-only. Local limits can differ per environment even if agent strings collided; on-chain they cannot. Keep UUIDs unique.
+
+Align local `maxAmount` with `EvmAnchor.initSpendingLimit(..., maxAmountWei, periodSecs)`. After an allowed action that actually spends, call both `recordSpend` locally and `client.evm.recordSpend` so windows do not diverge. Amounts are wei on both paths.
+
+---
+
+## On-Chain Policy Alignment
+
+| Layer | Authority | Speed |
+|-------|-----------|-------|
+| SDK `setToolPolicy` | Operator cache | Instant pre-check |
+| `defineToolPolicy` | Environment owner on `Veya.sol` | Durable ACL |
+| `toolPolicies` mapping | Robinhood Chain consensus | Dispute resolution |
+
+```mermaid
+sequenceDiagram
+    participant Owner as Environment Owner
+    participant V as Veya.sol
+    participant SDK as @veya/sdk
+    participant Agent as Agent Runtime
+
+    Owner->>V: defineToolPolicy(env, agent, tool, allowed)
+    Agent->>V: eth_call toolPolicies
+    Agent->>SDK: setToolPolicy per record
+    Agent->>SDK: evaluateToolCall / routeMessage
+    SDK-->>Agent: allowed / denied
+```
+
+On-chain tool names longer than 64 bytes revert `ToolNameTooLong`. Keep MCP names short. Mapping key is `keccak256(abi.encodePacked(agentUuid, toolName))`. Fetching all policies requires indexing `ToolPolicyUpdated` events; the contract does not enumerate.
+
+`allowed: false` on chain is an explicit deny record, distinct from absence. The in-process map treats absence as deny either way. Bootstrapping should still record explicit denials if operators want to distinguish "never configured" from "revoked" in logs; the Set only stores allows.
+
+---
+
+## Environment Isolation
+
+`PolicyAgentConfig.environmentId` is the isolation string for local spending. Tool policy maps are not environment-scoped. Combine them by using globally unique agent UUIDs registered under a single environment on `Veya.sol`.
+
+Memory, sealed execution, and anchoring all take environment ids. A coordination message that crosses environments is an application-level event. The router will not stop it if the tool is allowed for `fromAgent`. Add an explicit `fromEnvironment === toEnvironment` check in the agent runtime if that is required.
+
+---
+
+## Multi-Agent Topologies
+
+Common shapes:
+
+| Topology | Pattern |
+|----------|---------|
+| Pair | Treasurer agent tools allowed; watcher agent tools read-only |
+| Hub | Coordinator `fromAgent` allowed to `dispatch`; workers denied `recordSpend` tools |
+| Quorum-backed | `requireConsensus: true` on the PolicyAgent for the treasury environment |
+
+In all cases the EVM payer may be a single operations key while ML-DSA identities are per agent. Do not use the gas key as the MCP sender identity.
+
+---
+
+## Consensus Gating
+
+When `gateConsensus` allows with consensus required, the runtime should call `client.runConsensus` and only then sealed execution or `recordSpend`. The agreed BLAKE3 hash can be passed to `anchorPqAttestation`.
+
+Coordination does not import `runConsensus`. That keeps the router testable without HTTP nodes. Glue is the application's job.
+
+---
+
+## Failure Modes
+
+| Failure | Cause | Recovery |
+|---------|-------|----------|
+| All tools denied | Forgot `setToolPolicy` after restart | Bootstrap from chain events |
+| Spend denied unexpectedly | `maxWeiPerAction` in wrong units | Convert with `parseEther`; wei only |
+| Spend throw from `recordSpend` | Mutating path over cap | Use `checkSpendAllowed` first |
+| Verify false | JSON key order or stripped fields differ | Do not mutate message between sign and verify |
+| Kyber session missing | Process restart | Re-run `routeSecureMessage` |
+| On-chain policy not reflected | Never bootstrapped | Subscribe to `ToolPolicyUpdated` |
+| `ToolNameTooLong` | Name > 64 bytes | Shorten MCP names |
+| bigint stringify | Payload contains bigint | Decimal strings for wei |
+
+Default deny after restart can look like a total outage. Health checks should fail if the allow-set is empty while chain has policies.
+
+---
+
+## Security
+
+The in-process map is not authenticated. Any code in the process can call `setToolPolicy(..., true)`. Protect the runtime. On-chain records are the audit source.
+
+ML-DSA signatures authenticate the envelope, not the HTTP hop. Combine with TLS for transport. Kyber shared secrets in memory are as safe as the host.
+
+`maxWeiPerAction` as a JavaScript number is not a cryptographic bound. The on-chain `uint256` cap is the binding limit if the application always calls `recordSpend` on `Veya.sol`. If it does not, local state can be reset by restarting the process. Durability requires the chain.
+
+Never log full `McpMessage` objects if payloads contain destination addresses or amounts. Log `id`, `tool`, and `policyStatus`.
+
+---
+
+## Worked Example
+
+```typescript
+import {
+  PolicyAgent,
+  setToolPolicy,
+  setSpendingLimit,
+  routeSecureMessage,
+  verifySecureMessage,
+} from "@veya/sdk";
+import * as pq from "@veya/sdk/pq";
+
+const environmentId = "550e8400-e29b-41d4-a716-446655440000";
+const agentId = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+
+setToolPolicy(agentId, "transfer_funds", true);
+setSpendingLimit(environmentId, agentId, 10n ** 16n, 86_400); // 0.01 ETH per day
+
+const policy = new PolicyAgent({
+  environmentId,
+  agentId,
+  maxWeiPerAction: Number(10n ** 15n), // 0.001 ETH coarse gate
+  requireConsensus: true,
+});
+
+const decision = policy.evaluateToolCall({
+  id: crypto.randomUUID(),
+  fromAgent: agentId,
+  toAgent: "settlement-agent",
+  tool: "transfer_funds",
+  payload: { amountWei: "1000000000000000" },
+});
+
+if (!decision.allowed) throw new Error(decision.reason);
+
+const consensusGate = policy.gateConsensus(true);
+if (!consensusGate.allowed) throw new Error(consensusGate.reason);
+
+const identity = await pq.generatePQIdentity();
+const secured = await routeSecureMessage(
+  {
+    id: decision.routed!.id,
+    fromAgent: agentId,
+    toAgent: "settlement-agent",
+    tool: "transfer_funds",
+    payload: { amountWei: "1000000000000000" },
+  },
+  { senderPublicKey: identity.publicKey, senderPrivateKey: identity.privateKey },
+);
+
+if (!(await verifySecureMessage(secured, identity.publicKey))) {
+  throw new Error("envelope failed ML-DSA verify");
+}
+```
+
+After this, the runtime would `runConsensus`, optionally `protectedExecute`, then `EvmAnchor.recordSpend` with `1000000000000000n` wei.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `tool not in agent policy` | Allow-set empty or wrong agent id | `setToolPolicy`; match UUID strings |
+| `spending cap would be exceeded` | Cap too low or units wrong | wei; `maxWeiPerAction` |
+| Secure route has no sig | Tool was denied | Fix ACL first |
+| Verify false after logging | Logger mutated object | Verify before logging clones |
+| Chain allows, SDK denies | Cache stale | Re-bootstrap from `defineToolPolicy` records |
+| Lamports copied from old docs | Wrong unit | Use wei only |
+
+---
+
+## See Also
+
+- [pq-crypto.md](./pq-crypto.md): `signPQ`, Kyber, BLAKE3
+- [evm-anchoring.md](./evm-anchoring.md): `defineToolPolicy`, spending in wei
+- [decentralized-compute.md](./decentralized-compute.md): after `gateConsensus`
+- [memory.md](./memory.md): nullifiers for spend-once context
+- [sealed-execution.md](./sealed-execution.md): confidential handling after allow
