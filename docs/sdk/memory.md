@@ -267,3 +267,237 @@ The payer need not be the environment owner. Any address may flag a nullifier fo
 
 ---
 
+## memoryId Encoding
+
+Local `entry.id` is a UUID string such as `550e8400-e29b-41d4-a716-446655440000` (36 chars). On-chain `bytes16` is 16 bytes.
+
+A standard encoding is to parse the UUID into 16 raw bytes (strip hyphens, hex-decode). Do not BLAKE3 the UUID string to get `bytes16`; that would prevent operators from correlating explorer `bytes16` with the JSON `id` without extra bookkeeping. Do not use only the first 16 UTF-8 characters of the hyphenated string.
+
+```typescript
+function uuidToBytes16(uuid: string): Uint8Array {
+  const hex = uuid.replace(/-/g, "");
+  if (hex.length !== 32) throw new Error("invalid uuid");
+  return Uint8Array.from(Buffer.from(hex, "hex"));
+}
+```
+
+`environmentId` on HTTP and in the JSON file is often the same UUID string form as used at `registerEnvironment`. Keep encodings consistent with `EvmAnchor.registerEnvironment`, which already expects `Uint8Array` of length 16.
+
+---
+
+## Integrity Model
+
+BLAKE3 is computed over the `data` string at write and checked at read. It does not bind `agentId` or `environmentId` into the hash. Swapping an entry to another key in the JSON file without changing `data` would still pass `readMemory` if the attacker also updates the map key that `readMemory` looks up. The lookup key is caller-supplied `(environmentId, id)`. Defense in depth: also verify `entry.environmentId === environmentId` and `entry.agentId` against the expected agent in application code. The current `readMemory` does not re-check those fields beyond using them to find the record.
+
+The hash does bind content. Changing `data` without changing `blake3ContentHash` fails integrity. Changing both together is equivalent to authorized rewrite and cannot be distinguished from a malicious editor with filesystem access. Filesystem ACL plus host integrity is required.
+
+PQ signatures over memory are not part of this module. An application may `signPQ(hashBlake3Bytes(data), agentKey)` and store the signature elsewhere or in `data` itself (carefully, because the hash would then include the signature: sign the inner payload only).
+
+---
+
+## Environment Isolation
+
+`listMemory` and `entryKey` isolate by `environmentId`. A read using the wrong environment throws `memory not found` even if the UUID `id` exists under another environment. That is the local isolation property.
+
+On-chain isolation is weaker for nullifiers because the key is only `memoryId`. Unique UUIDs restore isolation in practice.
+
+Do not put two tenants in one `MEMORY_FILE` without trusting the host. The file is not encrypted per environment.
+
+---
+
+## Coupling to Coordination and Spend
+
+Memory is a natural place to store "this disbursement intent was already used." The pattern:
+
+1. `storeMemory` with canonical intent JSON (amounts in wei strings).
+2. Policy allow + optional consensus.
+3. Execute.
+4. `invalidateMemory` + `flagMemoryNullifier`.
+5. `recordSpend` in wei on chain.
+
+If step 4 happens without step 5, accounting diverges. If step 5 happens without step 4, the memory can be read again and a confused runtime might double-intent even while the wei cap catches the second spend. Do both.
+
+`PolicyAgent` does not read memory. Glue it explicitly.
+
+---
+
+## Failure Modes
+
+| Failure | Cause | Recovery |
+|---------|-------|----------|
+| `memory not found` | Wrong ids or empty store after corrupt parse | Restore backup; confirm key |
+| `memory nullified` | Spend-once already applied | Treat as already used |
+| `memory integrity failed` | Tamper or concurrent write | Investigate; do not auto-rewrite hash |
+| Silent empty store | JSON parse error swallowed | Monitor file; fail-closed wrapper |
+| Lost updates | Two processes `saveStore` | Single writer |
+| `MemoryAlreadyNullified` | Double chain flag | Idempotent catch |
+| `EnvironmentDoesNotExist` | Flag before `registerEnvironment` | Register first |
+| UUID encoding mismatch | String vs bytes16 | `uuidToBytes16` |
+| Secrets in `data` | Misuse of store | Move secrets to a vault |
+
+Restarting the process does not clear memory; the file persists. Restarting does not restore nullifiers to false unless the file is deleted. Deleting `MEMORY_FILE` is a rollback of local nullifiers and is an incident if chain flags still exist (local miss, chain spent) or vice versa.
+
+---
+
+## Security Properties
+
+| Property | Provided? | Notes |
+|----------|-----------|-------|
+| Confidentiality | No | Plaintext JSON on disk |
+| Integrity | Yes | BLAKE3 on read |
+| Replay break (local) | Yes | `nullified` |
+| Replay break (global) | When chained | `flagMemoryNullifier` |
+| Authentication | No | Any process user can write the file |
+| PQ identity bind | Application-level | Sign hashes with ML-DSA |
+
+Home-directory storage is operator-local, not multi-tenant SaaS. Treat the workstation as the trust boundary.
+
+Never commit `agent-memory.json` to git. It may contain treasury context.
+
+---
+
+## Worked Example
+
+```typescript
+import {
+  storeMemory,
+  readMemory,
+  invalidateMemory,
+  listMemory,
+} from "@veya/sdk";
+import { VeyaClient } from "@veya/sdk";
+
+const environmentId = "550e8400-e29b-41d4-a716-446655440000";
+const agentId = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+
+const stored = await storeMemory(
+  environmentId,
+  agentId,
+  JSON.stringify({ amountWei: "1000000000000000", note: "one-shot intent" }),
+);
+
+const fresh = await readMemory(environmentId, stored.id);
+const parsed = JSON.parse(fresh.data);
+if (parsed.amountWei !== "1000000000000000") {
+  throw new Error("unexpected intent");
+}
+
+invalidateMemory(environmentId, stored.id);
+
+const client = new VeyaClient({
+  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
+});
+if (client.evm) {
+  const envBytes = uuidToBytes16(environmentId);
+  const memBytes = uuidToBytes16(stored.id);
+  await client.evm.flagMemoryNullifier(envBytes, memBytes);
+}
+
+const listed = listMemory(environmentId);
+const spent = listed.find((e) => e.id === stored.id);
+if (!spent?.nullified) throw new Error("local flag missing");
+```
+
+After the chain transaction confirms, inspect it on `https://explorer.testnet.chain.robinhood.com`. `ensureRobinhoodChain` will have required `eth_chainId` 46630 on testnet.
+
+---
+
+## Operational Backup and Restore
+
+`MEMORY_FILE` is the entire local history of agent context. Back it up as you would any other operator state file, with the understanding that it is plaintext. Encrypted backups (age, Tarsnap, volume encryption) are appropriate; committing the file to a git remote is not.
+
+Restore procedure:
+
+1. Stop writers (`storeMemory` / `invalidateMemory`).
+2. Replace `~/.veya/agent-memory.json` with the backup.
+3. Optionally run `listMemory` per environment and spot-check `readMemory` on a non-nullified id.
+4. Compare on-chain `nullifiers` for ids that the backup marks as nullified. If the chain is ahead (flagged, local not), invalidate local. If local is ahead (nullified, chain not), call `flagMemoryNullifier` to catch up.
+
+A restore that rolls back nullifiers while the chain still shows `MemoryAlreadyNullified` is safe for chain (the second flag reverts) and unsafe for execution (local `readMemory` might succeed). Always align local flags to the chain in that direction: chain spent implies local spent.
+
+Do not restore onto a host that already has a divergent file without taking a copy of the divergent file first. Pretty-printed JSON diffs are readable; use them.
+
+### File format stability
+
+The store is JSON with `entries` and `policies` keys. Additional top-level keys will survive a `saveStore` only if `loadStore` round-trips the whole object. Today `loadStore` types the file as `StoreFile` and `saveStore` writes that object. Extra keys from a hand edit are dropped on the next `storeMemory`. Put operator annotations inside `data` or in a sidecar file, not as extra top-level JSON keys.
+
+Pretty printing (`null, 2`) makes git-style diffs possible for encrypted local history tools. It also makes accidental whitespace edits visible to BLAKE3 because `data` values are separate strings; pretty printing of the envelope does not change `data` hashes unless someone reformats the `data` field itself.
+
+---
+
+## Concurrency and Locking
+
+`loadStore` / `saveStore` is a read-modify-write with no file lock. Two `storeMemory` calls in overlapping processes can drop an entry. Recommended deployment is one agent runtime per `MEMORY_FILE`. If multiple processes are required, shard by `environmentId` into separate files via a wrapper, or serialize writers through a queue.
+
+`readMemory` is safe concurrent with other readers. Concurrent with a writer, a reader may see a torn file if the write is interrupted mid-`writeFileSync`. `writeFileSync` is typically atomic on POSIX for small files on the same filesystem; on Windows, treat interruptions as a possible corrupt-file event (empty store after parse failure). A wrapper that writes to a temp file and renames is a reasonable hardening patch at the application layer.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| File missing | First run | `storeMemory` creates it |
+| All reads fail integrity | Editor changed whitespace | Restore file; rewrite via `storeMemory` |
+| Chain flag but local readable | Forgot `invalidateMemory` | Invalidate local |
+| Local spent, chain missing | Forgot `flagMemoryNullifier` | Flag on `Veya.sol` |
+| Wrong home directory | Service user vs interactive user | Pin `HOME` / profile |
+| Permission denied on write | ACL | Grant the runtime user write on `~/.veya` |
+| Entries vanished | Corrupt JSON parsed as empty | Restore backup; fail-closed wrapper |
+| Double spend locally | Two hosts, one file copy | Chain nullifier is source of spent-once |
+
+---
+
+## Compatibility with Veya.sol Nullifiers
+
+`flagMemoryNullifier` is camelCase in `INSTRUCTION_NAMES` and in the inlined ABI. The Solidity error `MemoryAlreadyNullified` is the on-chain equivalent of local `memory nullified`. Map it through `fromAnchorRevert` when wrapping ethers errors; if the selector is not in `VEYA_REVERT_SELECTORS`, it will surface as `ANCHOR_REVERT` with raw data. Operators can still detect the condition by catching the revert message or by `eth_call`-ing `nullifiers(memoryId)` and reading `nullified`.
+
+The environment UUID on the chain flag should match the environment used in `storeMemory`. The contract does not verify that correspondence beyond storing both fields. An application that flags a memory id under the wrong environment still spends the global `memoryId` key. Double-check `uuidToBytes16` mappings in tests.
+
+`EvmAnchor.ensureRobinhoodChain` runs before the flag write. A memory-only local workflow never hits that gate. Mixed workflows (local store plus chain flag) must use a client constructed with `payerPrivateKey` and a RPC that reports chain id 46630 on testnet.
+
+Wei spending is adjacent but separate: nullifying memory does not call `recordSpend`. If the memory represented a disbursement intent, call both. If it represented a read-once credential, skip spend accounting.
+
+---
+
+## Testing Notes
+
+Unit tests can call `storeMemory` / `readMemory` / `invalidateMemory` against the real home-directory file. That is a process-level side effect. Prefer setting a throwaway user profile in CI or accepting that developers' `~/.veya/agent-memory.json` will accumulate entries. Do not point tests at production operator files.
+
+Integrity tests should mutate `data` on disk and expect `memory integrity failed`. Nullifier tests should expect `readMemory` to throw after `invalidateMemory` while `listMemory` still contains the row.
+
+Chain tests for `flagMemoryNullifier` require a funded payer, a registered environment, and Robinhood Chain RPC. Keep them behind an explicit env flag so default `npm test` stays off-chain.
+
+---
+
+`listMemory` is an operator viewer. Execution engines must call `readMemory` so integrity and nullifier checks run on every use. Skipping that path to "save a hash" is how replay and tamper sneak in.
+
+The default store location cannot be changed through `resolveConfig`. Wrappers that need isolation should run as a dedicated OS user so `os.homedir()` points at a dedicated profile.
+
+On Robinhood Chain testnet the contract address for flags is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. Pin it. Do not pass a random ERC-20 and expect nullifier semantics.
+
+Amounts inside `data` JSON are application-defined. When they represent native value they are wei strings, matching `PolicyAgentConfig.maxWeiPerAction` and `initSpendingLimit`.
+
+Pretty-printed store files are still plaintext. Disk encryption and ACLs are the confidentiality layer; BLAKE3 is only integrity.
+
+---
+
+Nullifier order is local first, then chain, so a crash between the two leaves a conservative local deny. The opposite order can allow a local re-read while the chain already spent the id.
+
+UUID `bytes16` encoding must be hyphen-stripped hex, not UTF-8 of the hyphenated string. Tests should round-trip `uuidToBytes16` against `registerEnvironment` ids.
+
+---
+
+Keep `INSTRUCTION_NAMES` camelCase when documenting the flag write: `flagMemoryNullifier`, never `flag_memory_nullifier`.
+
+Home-directory JSON is not a multi-region store. Replicate by application design, not by copying the file while writers run.
+
+---
+
+## See Also
+
+- [pq-crypto.md](./pq-crypto.md): `hashBlake3`
+- [evm-anchoring.md](./evm-anchoring.md): `flagMemoryNullifier`
+- [coordination.md](./coordination.md): when to nullify relative to tools
+- [sealed-execution.md](./sealed-execution.md): confidential payloads vs plaintext memory
+- [configuration.md](./configuration.md): client construction for chain flags
