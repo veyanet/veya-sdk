@@ -405,3 +405,249 @@ Connecting a wallet to Ethereum mainnet (`1`), a local Anvil (`31337`), or any o
 
 ---
 
+## Module Resolution Map
+
+| SDK export | Config dependency | Crypto primitives |
+|------------|-------------------|-------------------|
+| `VeyaClient.pqKeygen()` | None | ML-DSA-44 (`@noble/post-quantum`) |
+| `VeyaClient.hashBlake3()` | None | BLAKE3-256 (`hash-wasm`) |
+| `VeyaClient.runConsensus()` | `validatorNodes` | BLAKE3 + ML-DSA (node-side) |
+| `VeyaClient.protectedExecute()` | `sealedNodeUrl` | AES-256-GCM + BLAKE3 |
+| `VeyaClient.registerPqOnchain()` | `payerPrivateKey`, `rpcUrl`, `contractAddress`, `chainId` | ML-DSA + BLAKE3 |
+| `pq.generateKyberKeys()` | None | Kyber-768 / ML-KEM-768 |
+| `routeMessage()` | None (in-process policy map) | Optional Kyber session |
+| `storeMemory()` | None | BLAKE3 content hash, file at `~/.veya/agent-memory.json` |
+| `PolicyAgent` | None at construct time | `maxWeiPerAction` is wei, not lamports |
+
+Import paths:
+
+```typescript
+import { VeyaClient, resolveConfig, pq, EvmAnchor } from "@veya/sdk";
+import { runConsensus } from "@veya/sdk";
+import { protectedExec } from "@veya/sdk";
+import { ROBINHOOD_TESTNET, INSTRUCTION_NAMES } from "@veya/sdk";
+```
+
+`INSTRUCTION_NAMES` is a camelCase catalog of `Veya.sol` write functions. Tests assert that `register_environment` is not present. Use these names when logging, when matching ABI entries, and when documenting operator playbooks.
+
+---
+
+## ABI Inlining and Contract Address
+
+**File:** `src/abi/index.ts`
+
+```typescript
+import artifact from "./Veya.json" with { type: "json" };
+
+export const VEYA_ABI = artifact.abi as InterfaceAbi;
+export const VEYA_BYTECODE = artifact.bytecode as string;
+export const VEYA_CONTRACT_ADDRESS =
+  "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84";
+```
+
+The ABI is compiled from `robinhood/contracts/Veya.sol` and vendored into the SDK. Keep `src/abi/Veya.json` in lockstep with that Solidity source. Because there is no `@veya/program` package, changing the contract without regenerating this JSON will produce ethers encoding that does not match the deployed bytecode.
+
+`EvmAnchor` constructs `new ethers.Contract(resolved.contractAddress, VEYA_ABI, this.wallet)`. A wrong `contractAddress` that still has code will revert on selector mismatch. A wrong address with no code will fail at estimate/gas. Both are preferable to silently writing to an unrelated contract.
+
+`VEYA_BYTECODE` is exported for deploy scripts. Runtime anchoring does not redeploy. Production clients should pin `VEYA_CONTRACT_ADDRESS` and refuse to start if the configured address does not match the expected deployment.
+
+---
+
+## Local Development Stack
+
+Typical gitignored local env:
+
+```env
+ROBINHOOD_RPC_URL=https://rpc.testnet.chain.robinhood.com
+ROBINHOOD_CHAIN_ID=46630
+ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
+VEYA_CONTRACT_ADDRESS=0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
+VEYA_VALIDATOR_NODES=http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703
+VEYA_SEALED_NODE_URL=http://127.0.0.1:7800
+```
+
+### Startup order
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant Val as validator-node x3
+    participant Seal as sealed-node
+    participant RPC as Robinhood RPC
+    participant SDK as @veya/sdk
+
+    Op->>Val: alpha 7701, beta 7702, gamma 7703
+    Op->>Seal: sealed-node 7800
+    Op->>SDK: new VeyaClient()
+    SDK->>Val: runConsensus()
+    SDK->>Seal: protectedExecute()
+    SDK->>RPC: ensureRobinhoodChain + Veya.sol writes
+```
+
+1. Start the validator fleet: see [operations/consensus-cluster.md](../operations/consensus-cluster.md).
+2. Start sealed-node: see [operations/sealed-node.md](../operations/sealed-node.md).
+3. Confirm the payer has testnet ETH for gas (wei-denominated).
+4. Run SDK tests: `npm install && npm test`.
+
+Local nodes never replace chain id checks. Even when validators run on loopback, `EvmAnchor` still queries `eth_chainId` before the first `Veya.sol` write.
+
+---
+
+## Production Patterns
+
+### Ephemeral payer injection
+
+```typescript
+import { readFileSync } from "node:fs";
+import { VeyaClient } from "@veya/sdk";
+
+const payerPrivateKey = readFileSync("/run/secrets/deployer.key", "utf8").trim();
+const client = new VeyaClient({
+  payerPrivateKey,
+  rpcUrl: process.env.ROBINHOOD_RPC_URL,
+  contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
+  chainId: Number(process.env.ROBINHOOD_CHAIN_ID ?? 46630),
+});
+```
+
+Do not log the key. If a process dump is required, redact `payerPrivateKey` and any RPC URLs that embed credentials.
+
+### Multi-environment config
+
+| Environment | `rpcUrl` | `chainId` | `contractAddress` | Nodes |
+|-------------|----------|-----------|-------------------|-------|
+| local nodes + testnet settlement | public testnet RPC | `46630` | published `Veya.sol` | loopback 7701–7703, 7800 |
+| staging | dedicated testnet RPC | `46630` | staging deploy if different | 3 VMs on a private NIC |
+| production | dedicated RPC | pinned production chain id | audited `Veya.sol` | 5 validators, threshold still 2 unless the client is changed |
+
+Never share `payerPrivateKey` across environments. Rotate on compromise. Spending caps (`PolicyAgentConfig.maxWeiPerAction` and `initSpendingLimit`) must be re-derived in wei for each environment; copying a lamport figure from another stack will under- or over-constrain treasury agents by many orders of magnitude.
+
+### Config validation helper
+
+```typescript
+import { resolveConfig, isRobinhoodTestnet } from "@veya/sdk";
+
+function assertAnchoringReady() {
+  const cfg = resolveConfig();
+  if (!cfg.payerPrivateKey) throw new Error("payerPrivateKey required");
+  if (!isRobinhoodTestnet(cfg.chainId) && cfg.chainId !== expectedProductionChainId) {
+    throw new Error(`unexpected chain id ${cfg.chainId}`);
+  }
+  if (cfg.contractAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+    throw new Error("contractAddress does not match pinned Veya.sol");
+  }
+}
+```
+
+---
+
+## Security and Trust Boundaries
+
+| Risk | Mitigation |
+|------|------------|
+| Committed private keys | Gitignore secrets; never commit `.env` with `VEYA_DEPLOYER_PRIVATE_KEY` |
+| Env leakage in logs | Redact `payerPrivateKey` and RPC API keys |
+| Public validator ports | Bind private NIC; TLS reverse proxy |
+| Stale contract address | Pin `VEYA_CONTRACT_ADDRESS` per deployment |
+| Wrong-network writes | `ensureRobinhoodChain()` queries `eth_chainId` |
+| Classical crypto drift | SDK uses ML-DSA-44 + BLAKE3 + Kyber-768; no SHA-256 on new paths |
+| Unit confusion | Spend amounts are wei; `maxWeiPerAction` is the policy field name |
+
+Load secrets from HSM, vault, or ephemeral env injection. Restrict file permissions on key files (`chmod 600` on Unix, ACL lockdown on Windows). PQ verification remains off-chain: configuration does not change that split. `Veya.sol` stores hashes and signature bytes; auditors verify ML-DSA using `@veya/sdk/pq`.
+
+The JSON-RPC endpoint is a trust boundary. A malicious RPC can lie about receipts, gas, and logs. It cannot change `eth_chainId` without failing `ensureRobinhoodChain` if the operator configured the expected id, but it can still withhold transactions. Use an RPC the operator controls or a provider with a documented SLA.
+
+Validator and sealed nodes are also trust boundaries. They see plaintext payloads (sealed-node after key derivation) or execution inputs (validators). Network isolation matters as much as cryptographic choices. Configuration cannot compensate for a public `7800` bind on a shared host.
+
+---
+
+## Failure Modes and Recovery
+
+| Failure | Detection | Recovery |
+|---------|-----------|----------|
+| RPC returns a different chain id | `ensureRobinhoodChain` throws | Fix `ROBINHOOD_RPC_URL` or `chainId`; reconstruct the client |
+| RPC unreachable | ethers network error on first write or read | Retry with backoff; switch provider; do not disable the chain check |
+| Missing payer | `registerPqOnchain` throws | Inject `payerPrivateKey`; keep off-chain methods available |
+| Empty `validatorNodes` | `runConsensus` returns no results, `consensus_reached: false` | Restore the three default origins or a production fleet |
+| Comma-split produced one URL | Env missing commas | Use `http://a:7701,http://b:7702,http://c:7703` |
+| `chainId` is `NaN` | `BigInt(NaN)` throws inside the chain gate | Set a numeric `ROBINHOOD_CHAIN_ID` |
+| ABI drift vs deployed `Veya.sol` | Revert on unknown selector | Regen `src/abi/Veya.json` from the deployed compiler artifact |
+| Spend configured in lamports | Immediate over-cap or under-cap vs wei intent | Convert with `ethers.parseEther`; use `maxWeiPerAction` |
+| Explorer origin has a trailing slash | Duplicate slash in URLs if helpers were bypassed | `explorerTxUrl` already strips trailing slashes |
+
+`networkChecked` is per `EvmAnchor` instance. After a successful check, a later RPC hijack on the same provider object would not be re-validated. Recreate the client when rotating RPC URLs.
+
+Failed consensus does not roll back anything on-chain because consensus is off-chain. Failed sealed execution similarly leaves no chain residue unless the operator later calls `storeSealedState`. Treat HTTP failures as local and retry with the same `task_id` only when the payload is idempotent.
+
+---
+
+## Performance and Scaling
+
+`resolveConfig` is synchronous and cheap. It may be called per request, but constructing `EvmAnchor` creates a provider and a wallet, so prefer one client per process.
+
+`ensureRobinhoodChain` costs one `eth_chainId` round trip per process (first write). Subsequent writes reuse the cached flag.
+
+`runConsensus` currently queries validator nodes sequentially. Latency is the sum of node round trips, not the max. For a 3-node fleet on loopback this is negligible. For geographically distributed nodes, expect hundreds of milliseconds to a few seconds. The threshold remains 2 matching BLAKE3 hashes regardless of fleet size; extra nodes improve availability, not the numeric threshold, unless `consensus.ts` is changed.
+
+JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction that waits for mining via `tx.wait()`. Configure ethers polling if the RPC's default interval is too slow for the operator's confirmation SLA.
+
+---
+
+## Compatibility and Versioning
+
+`@veya/sdk` version `1.0.0` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
+
+Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case leftovers from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
+
+Environment variable names listed in this document are the compatibility surface for operators. Introducing aliases for old Solana-oriented names is out of scope; those variables are not read.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `payerPrivateKey required for on-chain ops on Robinhood Chain` | No payer in config | Pass `payerPrivateKey` or use off-chain methods only |
+| `VEYA SDK expected chain id 46630` | RPC is not Robinhood Chain | Point `ROBINHOOD_RPC_URL` at `rpc.testnet.chain.robinhood.com` |
+| `fetch failed` on consensus | Validator nodes not running | Start `validator-node` on ports 7701–7703 |
+| `sealed-node error: 500` | sealed-node not started | Bind sealed-node on `7800` |
+| Revert on first write | Wrong `contractAddress` or ABI drift | Pin `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` and refresh `src/abi` |
+| Rate limit / 429 on RPC | Public endpoint saturation | Use a dedicated Robinhood Chain RPC |
+| `validatorNodes` has one URL | Env parse error | Comma-separate without quoting issues |
+| Spend reverts `SpendingLimitExceeded` | Amount not in wei, or cap too low | Use wei; `PolicyAgentConfig.maxWeiPerAction` |
+| Explorer link 404 | Wrong explorer origin or missing `0x` | Use `explorerTxUrl` from `src/chain.ts` |
+| Wallet cannot parse key | Solana JSON array passed as payer | Use hex secp256k1, not a 64-byte array |
+
+### Diagnostic script
+
+```typescript
+import { resolveConfig, ROBINHOOD_TESTNET, isRobinhoodTestnet } from "@veya/sdk";
+
+const cfg = resolveConfig();
+console.table({
+  rpcUrl: cfg.rpcUrl,
+  chainId: cfg.chainId,
+  isTestnet: isRobinhoodTestnet(cfg.chainId),
+  contract: cfg.contractAddress,
+  explorer: cfg.explorerUrl,
+  validators: cfg.validatorNodes.length,
+  sealed: cfg.sealedNodeUrl,
+  hasPayer: Boolean(cfg.payerPrivateKey),
+  defaultContract: ROBINHOOD_TESTNET.contractAddress,
+});
+```
+
+If `isTestnet` is false while the operator intended testnet, stop before sending a transaction. If `contract` does not match `defaultContract` and that was not intentional, stop as well.
+
+---
+
+## See Also
+
+- [pq-crypto.md](./pq-crypto.md): ML-DSA-44, Kyber-768, BLAKE3 primitives
+- [evm-anchoring.md](./evm-anchoring.md): `EvmAnchor` and on-chain flows
+- [decentralized-compute.md](./decentralized-compute.md): `runConsensus()` client
+- [sealed-execution.md](./sealed-execution.md): `protectedExec()` client
+- [coordination.md](./coordination.md): MCP routing and `maxWeiPerAction`
+- [memory.md](./memory.md): local store and on-chain nullifiers
+- [operations/consensus-cluster.md](../operations/consensus-cluster.md): validator fleet
+- [operations/sealed-node.md](../operations/sealed-node.md): sealed-node runbook
