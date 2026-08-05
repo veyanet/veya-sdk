@@ -562,3 +562,238 @@ Invariant: `quorum_hash == local_hash == on_chain_commitment` when an attestatio
 
 ---
 
+## Sealed Execution Subsystem
+
+```
+SDK / VeyaClient                 sealed-node:7800
+    |                              |
+    |- session_entropy 32 bytes -->|
+    |- environmentId, agentId      |
+    |- eventType, payload          |
+    |                              |- Derive session key Kyber + BLAKE3
+    |                              |- AES-256-GCM
+    |                              |- protected execute
+    |                              +- Return SealedExecResult
+    v
+Optional: storeSealedState on Veya.sol for DA
+```
+
+`protectedExec` posts JSON:
+
+```json
+{
+  "environment_id": "<uuid>",
+  "agent_id": "<uuid>",
+  "event_type": "policy_eval",
+  "payload_json": "{\"rule\":\"max_spend\"}",
+  "session_entropy_hex": "<64 hex chars>"
+}
+```
+
+The node returns `SealedExecResult` with `output_blake3_hash`, `mldsa_signature`, `verified`, and a `sealed` object (`ciphertext`, `blake3_commitment`, `context_label`). Ciphertext stays large; the chain sees the hash (and optional chunks ≤ 8,192 bytes).
+
+### Sealed execution failure modes
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| Node down | `fetch` connection refused | Restart sealed-node; retry |
+| Chunk too large | `SealedChunkTooLarge` | Split into ≤8192 byte chunks |
+| Key derivation mismatch | Decrypt failure off-chain | Verify Kyber material and `sessionEntropy` |
+| HTTP non-OK | `sealed-node error: 503` | Treat as fail-closed; do not mark protected |
+| Unauthorized environment | 403 from node | Check environment registration |
+
+Sealed path today is AES-256-GCM + BLAKE3 + ML-DSA. Homomorphic compute is not claimed as live.
+
+---
+
+## Memory and Nullifiers
+
+Scoped memory provides agent-local state with integrity guarantees.
+
+**Off-chain (SDK `memory/nullifier.ts`):**
+
+- `storeMemory`: BLAKE3 content hash at write time into `~/.veya/agent-memory.json`
+- `readMemory`: Re-hash and compare before return; throws on integrity failure
+- `invalidateMemory`: Soft nullify in the local map
+- `listMemory`: Operator viewer for an environment
+
+**On-chain (`flagMemoryNullifier`):**
+
+- Writes `nullifiers[memoryId]` with `nullified == true`
+- Second flag returns `MemoryAlreadyNullified`
+- Enables cross-agent audit of consumed memory slots
+
+```mermaid
+flowchart LR
+    W["storeMemory\nBLAKE3 hash"] --> R["readMemory\nre-hash verify"]
+    R --> I["invalidateMemory\nlocal nullify"]
+    I --> F["flagMemoryNullifier\nVeya.sol"]
+    F --> X["Replay blocked"]
+```
+
+Production deployments should anchor nullifier flags after local invalidation to prevent replay across environments. The hosted API currently enforces spend in its own database and treats memory as content hashes; on-chain nullifier-gated memory is available on the contract and SDK even when a given API route has not wired it yet.
+
+---
+
+## Spending and Policy Enforcement
+
+### Spending limits
+
+SecureEnclave and Governance environments use on-chain **wei** caps (native ETH on Robinhood Chain):
+
+| Function | Effect |
+|----------|--------|
+| `initSpendingLimit(agentUuid, maxAmount, periodSecs)` | One mapping entry per agent |
+| `recordSpend(amount)` | Increments `spentAmount` |
+| Period rollover | Resets counter when `now >= periodStart + periodSecs` |
+| Overflow | Exceeds cap → `SpendingLimitExceeded` |
+
+SDK local preflight (`setSpendingLimit`, `checkSpendAllowed`, `recordSpend` in `spending/limits.ts`) runs **before** consensus and sealed execution so an operator does not burn gas on a call that will revert. The hosted API also gates with HTTP 402 when a room's JSON cap would be exceeded. On-chain arithmetic remains authoritative for settlement disputes.
+
+### Tool policies
+
+MCP tool invocation is gated by `defineToolPolicy(environmentUuid, agentUuid, toolName, allowed)`:
+
+- Mapping seeded by agent UUID + tool name (max 64 chars, `MAX_TOOL_NAME_LEN`)
+- SDK `setToolPolicy` / `routeMessage` mirrors policy locally for preflight
+- Deny-by-default: a tool not in the set is `denied`
+- `routeSecureMessage` adds a Kyber-768 session id and an ML-DSA signature over the JSON envelope **after** policy allows
+- On-chain policy is authoritative for settlement disputes
+
+`PolicyAgent.evaluateToolCall` combines tool ACL and optional `maxWeiPerAction`.
+
+---
+
+## Veya.sol Contract Design
+
+### Why off-chain PQ verification?
+
+| Factor | On-chain verify | Off-chain verify |
+|--------|-----------------|------------------|
+| Gas | Prohibitive for ML-DSA lattice ops | Native speed in TypeScript / Rust nodes |
+| Calldata size | 2.4–4.6 KB signatures | Full keys in local store |
+| Audit permanence | Hash + optional sig bytes immutable | Verifier replays anytime |
+| Upgrade path | Contract redeploy | npm bump of `@noble/post-quantum` |
+
+### Mapping uniqueness
+
+Several functions revert if a key already exists (`EnvironmentAlreadyExists`, `AttestationAlreadyExists`, `CommitmentAlreadyExists`, `PqAttestationAlreadyExists`). Operators must not retry the same digest as a new write; they should look up the existing record.
+
+### Error taxonomy
+
+| Error category | Examples |
+|----------------|----------|
+| Authorization | `Unauthorized`, `EnvironmentDoesNotExist` |
+| Spending | `SpendingLimitExceeded`, `SpendingLimitDoesNotExist` |
+| Crypto storage | `SignatureTooLarge` |
+| Sealed | `SealedChunkTooLarge` |
+| Memory | `MemoryAlreadyNullified` |
+| Identity | `InvalidEnvironmentType`, `InvalidAgentRole` |
+| Uniqueness | `CommitmentAlreadyExists`, `AttestationAlreadyExists` |
+
+`fromAnchorRevert` maps known 4-byte selectors onto `VeyaSdkError.code` so callers branch on `SPENDING_EXCEEDED` rather than substring-matching `Error.message`.
+
+### Events as the auditor index
+
+Every write emits an event (`EnvironmentRegistered`, `ExecutionAttested`, `CommitmentStored`, …). Indexers and `explorerTxUrl` receipts are the primary discovery path. Mapping getters (`environments(bytes16)`, `commitments(bytes32)`, …) are the primary read path.
+
+---
+
+## Data Flow Diagrams
+
+### Full agent lifecycle
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant SDK as VeyaClient
+    participant Store as agent-memory.json
+    participant PQ as ML-DSA / BLAKE3
+    participant Val as Validator Nodes
+    participant Chain as Robinhood 46630
+
+    Op->>SDK: new VeyaClient config
+    Op->>SDK: pqKeygen
+    SDK->>PQ: generatePQIdentity
+    PQ-->>Op: pubkey + BLAKE3 fingerprint
+    Op->>Chain: registerEnvironment
+    Op->>Store: storeMemory optional
+    Op->>Val: runConsensus 3 nodes
+    Val-->>SDK: NodeResults + ML-DSA sigs
+    SDK->>SDK: threshold 2 BLAKE3 match
+    Op->>Chain: attestExecution or storeCommitment
+```
+
+### PQ verification audit
+
+```mermaid
+flowchart LR
+    A[Fetch receipt via ethers] --> B[Confirm to is Veya.sol]
+    B --> C[Load ML-DSA pubkey]
+    C --> D{blake3 pk == pqHash?}
+    D -->|no| E[Reject identity mismatch]
+    D -->|yes| F[ML-DSA verify sig over hash]
+    F -->|fail| G[Reject invalid signature]
+    F -->|pass| H{consensus hash match?}
+    H -->|optional fail| I[Reject quorum divergence]
+    H -->|pass| J[Accept attestation]
+```
+
+### Hosted API versus direct SDK
+
+```mermaid
+flowchart TB
+    Dash["robinhood/utility"] --> API["https://api.veyanet.tech"]
+    API --> SDK["@veya/sdk"]
+    Integrator["Integrator process"] --> SDK
+    SDK --> RPC["rpc.testnet.chain.robinhood.com"]
+    SDK --> Nodes["7701-7703 and 7800"]
+    RPC --> Contract["Veya.sol"]
+```
+
+Both paths share one ABI, one chain id, and one commitment primitive.
+
+---
+
+## Trust Boundaries
+
+| Boundary | Trusted party | Verification |
+|----------|---------------|--------------|
+| Robinhood Chain validators | Chain consensus | Standard JSON-RPC confirmation |
+| Environment owner | Wallet holder | `msg.sender` on `registerEnvironment` |
+| Validator nodes | Node operator | ML-DSA attestation + quorum |
+| Sealed node | Node operator | Ciphertext commitment audit |
+| Local store | Machine user | Filesystem permissions on `~/.veya` |
+| Hosted API relayer | API operator | Guest cannot drive writes; SDK usable without API |
+| RPC endpoint | RPC operator | `eth_chainId` must equal 46630 |
+
+```mermaid
+flowchart TB
+    subgraph Trusted["Operator-Controlled"]
+        SDK["@veya/sdk"]
+        Store["~/.veya"]
+        Nodes["validator + sealed nodes"]
+    end
+    subgraph SemiTrusted["Robinhood Chain"]
+        RPC["JSON-RPC + consensus"]
+        Program["Veya.sol"]
+    end
+    subgraph Optional["Optional Convenience"]
+        API["https://api.veyanet.tech"]
+    end
+    subgraph Untrusted["Assume Hostile"]
+        Network["Public internet"]
+        Observers["Chain observers"]
+    end
+    SDK --> Store
+    SDK --> Nodes
+    SDK --> RPC
+    API --> SDK
+    RPC --> Program
+    Observers --> Program
+```
+
+No VEYA-hosted service is **required** inside the trust boundary. When the API is present, treat the relayer key as an operator secret, not as protocol root.
+
+---
+
