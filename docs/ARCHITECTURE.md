@@ -249,3 +249,316 @@ flowchart TB
 
 ---
 
+## High-Level System Data Flow
+
+```mermaid
+flowchart TB
+    subgraph OperatorLayer["Operator / Agent Runtime"]
+        Client["VeyaClient"]
+        API["https://api.veyanet.tech"]
+        Dash["utility dashboard"]
+    end
+
+    subgraph LocalBoundary["Local Process Boundary"]
+        Store["~/.veya/agent-memory.json"]
+        PQ["PQ Engine\nML-DSA + Kyber + BLAKE3"]
+        SealClient["protectedExec"]
+    end
+
+    subgraph ComputeFleet["Decentralized Compute"]
+        V1["validator-node :7701"]
+        V2["validator-node :7702"]
+        V3["validator-node :7703"]
+        Quorum["2/3 BLAKE3 Quorum"]
+    end
+
+    subgraph SealedBoundary["Protected Execution"]
+        SNode["sealed-node :7800"]
+        Cipher["Ciphertext + BLAKE3"]
+    end
+
+    subgraph Robinhood["Robinhood Chain Testnet"]
+        Prog["Veya.sol\n0x1a1Dc3c5…5d84"]
+        Maps["environments / agents / commitments"]
+    end
+
+    Dash --> API
+    API --> Client
+    Client --> PQ
+    Client --> Store
+    Client --> SealClient
+    Client -->|"POST /execute"| V1
+    Client -->|"POST /execute"| V2
+    Client -->|"POST /execute"| V3
+    V1 --> Quorum
+    V2 --> Quorum
+    V3 --> Quorum
+    SealClient -->|"POST /protected"| SNode
+    SNode --> Cipher
+    Quorum -->|"attestExecution / storeCommitment"| Prog
+    Client -->|"registerEnvironment"| Prog
+    Prog --> Maps
+```
+
+---
+
+## Component Inventory
+
+### `Veya.sol`
+
+The on-chain contract exposes exactly **10 write functions** (ABI names are Solidity camelCase; `INSTRUCTION_NAMES` in `src/program/instructions.ts` is the canonical list):
+
+| # | Function | Primary mapping | Purpose |
+|---|----------|-----------------|---------|
+| 1 | `registerEnvironment` | `environments[uuid]` | Create environment with PQ pubkey hash |
+| 2 | `registerAgent` | `agents[agentUuid]` | Register agent under environment |
+| 3 | `attestExecution` | `attestations[keccak256(authority, hash)]` | Anchor BLAKE3 hash + ML-DSA sig bytes |
+| 4 | `anchorPqAttestation` | `pqAttestations[executionHash]` | Link identity hash to execution hash |
+| 5 | `storeCommitment` | `commitments[commitment]` | Store standalone BLAKE3 commitment |
+| 6 | `initSpendingLimit` | `spendingLimits[agentUuid]` | Configure per-agent wei cap |
+| 7 | `recordSpend` | (mutates limit) | Increment spent counter with period rollover |
+| 8 | `defineToolPolicy` | `toolPolicies[keccak256(agent, tool)]` | ACL for MCP tool invocation |
+| 9 | `flagMemoryNullifier` | `nullifiers[memoryId]` | Mark memory entry as consumed |
+| 10 | `storeSealedState` | `sealedStates[keccak256(env, state, idx)]` | Store sealed ciphertext chunk |
+
+Contract address: `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on chain 46630.
+
+### TypeScript modules (`src`)
+
+| Module | Responsibility |
+|--------|----------------|
+| `client/VeyaClient.ts` | Facade: PQ, anchoring, consensus, sealed |
+| `client/evm.ts` | `EvmAnchor`: ethers v6 writes + chain-id guard |
+| `chain.ts` | `ROBINHOOD_TESTNET` constants, explorer URL helpers |
+| `config.ts` | `resolveConfig`: env vars and defaults |
+| `abi/` | Compiled `VEYA_ABI` + `VEYA_BYTECODE` inlined |
+| `pq/` | ML-DSA-44, Kyber-768, BLAKE3 via `@noble/post-quantum` and `hash-wasm` |
+| `compute/consensus.ts` | `runConsensus`: HTTP fan-out, threshold 2 |
+| `sealed/protectedExec.ts` | sealed-node HTTP client |
+| `coordination/` | MCP policy, Kyber sessions, `PolicyAgent` |
+| `memory/` | Local BLAKE3-scoped nullifiers |
+| `spending/limits.ts` | Local wei cap preflight |
+| `errors/veya-error.ts` | `VeyaSdkError` + Solidity selector mapping |
+| `program/instructions.ts` | `INSTRUCTION_NAMES` camelCase list |
+
+### Local binaries the SDK talks to
+
+| Binary | Default bind | Endpoint |
+|--------|--------------|----------|
+| `validator-node` alpha | `127.0.0.1:7701` | `POST /execute` |
+| `validator-node` beta | `127.0.0.1:7702` | `POST /execute` |
+| `validator-node` gamma | `127.0.0.1:7703` | `POST /execute` |
+| `sealed-node` | `127.0.0.1:7800` | `POST /protected` |
+
+These processes are not bundled inside the npm tarball. The SDK is the client. Operators run the nodes beside the SDK (or let `https://api.veyanet.tech` point `VEYA_VALIDATOR_NODES` / `VEYA_SEALED_NODE_URL` at them).
+
+---
+
+## Component Deep Dives
+
+### `Veya.sol` | On-chain settlement
+
+The contract is a single deployable unit. Design constraints:
+
+- **No EVM PQ verify**: `attestExecution` stores `mldsaSig` up to `MAX_MLDSA_SIG_LEN` (4,627 bytes) without cryptographic validation inside Solidity. Verification is the auditor's job using `@veya/sdk` `verifyPQ`.
+- **Mapping keys, not PDAs**: Records are keyed by `bytes16` UUIDs, `bytes32` hashes, or `keccak256(abi.encodePacked(...))`. There is no program-derived address scheme.
+- **Chunk bounds**: `storeSealedState` rejects chunks larger than `MAX_SEALED_CHUNK` (8,192 bytes).
+- **Owner-scoped isolation**: Environment owner is `msg.sender` at `registerEnvironment`. Agent registration, spending-limit init, and tool policy require that owner.
+
+Authorization always requires the environment owner (or, for `recordSpend` / `attestExecution`, any caller once the environment exists: spend and attest are intentionally not owner-only so a relayer can record). Cross-environment agent/policy mismatch returns `Unauthorized`.
+
+Custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, `MemoryAlreadyNullified`, `SignatureTooLarge`, …) are decoded by `fromAnchorRevert` in `src/errors/veya-error.ts` using 4-byte selectors.
+
+### `pq/` | PQ engine
+
+Central cryptographic authority for the TypeScript package. Modules:
+
+| Module | Primitive | NIST |
+|--------|-----------|------|
+| `mldsa.ts` | ML-DSA-44 (`ml_dsa44` from `@noble/post-quantum`) | FIPS 204 |
+| `kyber.ts` | Kyber-768 / ML-KEM-768 | FIPS 203 |
+| `blake3.ts` | BLAKE3-256 via `hash-wasm` |: |
+
+`generatePQIdentity` returns `{ publicKey, privateKey }`. Secret material never goes on-chain. Fingerprints are `publicKeyHashBlake3(publicKey)`: 32-byte hex stored as `bytes32 pqPubkeyHash`.
+
+Deep dive: [POST_QUANTUM.md](./POST_QUANTUM.md)
+
+### `compute/consensus.ts` | Quorum client
+
+```mermaid
+stateDiagram-v2
+    [*] --> FanOut: runConsensus(urls, taskId, payload)
+    FanOut --> Collecting: POST /execute x N nodes
+    Collecting --> Evaluating: all responses received
+    Evaluating --> ConsensusReached: max_count >= 2
+    Evaluating --> ConsensusFailed: no hash majority
+    ConsensusReached --> [*]: agreed_blake3_hash
+    ConsensusFailed --> [*]: consensus_reached false
+```
+
+Each validator:
+
+1. Receives `{ task_id, payload }` via HTTP
+2. Canonicalizes the payload
+3. Computes BLAKE3 execution hash
+4. Signs the hash with the node ML-DSA identity
+5. Returns `NodeResult { node_id, blake3_execution_hash, mldsa_signature, status }`
+
+Quorum logic: `max_count >= threshold` AND `results.length >= threshold`. Default threshold is **2** with **3** nodes. The SDK does not invent a passing quorum when nodes are down.
+
+### `sealed/protectedExec.ts` | Protected execution client
+
+```mermaid
+sequenceDiagram
+    participant SDK as protectedExec
+    participant Node as sealed-node:7800
+    participant PQ as pq module
+
+    SDK->>PQ: session entropy 32 bytes
+    SDK->>Node: POST /protected ciphertext metadata
+    Node->>Node: AES-256-GCM unseal and execute
+    Node-->>SDK: SealedExecResult
+    Note over SDK,Node: blake3 commitments for storeSealedState
+```
+
+The hosted API **fails closed**: if the sealed node is unreachable, callers get an HTTP error rather than a success badge. The SDK throws `sealed-node error: <status>` on non-OK responses.
+
+### `memory/` | Local persistence
+
+JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 content hash at write time. `readMemory` re-hashes before return. `invalidateMemory` soft-nullifies locally; `flagMemoryNullifier` is the on-chain counterpart. Filesystem permissions are the access-control boundary for the local file.
+
+### `client/evm.ts` | EVM integration
+
+`EvmAnchor` composes an ethers `JsonRpcProvider`, `Wallet`, and `Contract`. It does **not** pin `staticNetwork` so `getNetwork()` always queries `eth_chainId`. Methods map 1:1 to Solidity functions. `registerPqIdentity` is a convenience: ML-DSA keygen, `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint (named `memoTx` in the return object because it is the digest-anchor companion, implemented as `storeCommitment`, not a Solana memo program).
+
+### `https://api.veyanet.tech` | Optional hosted surface
+
+The API depends on `"@veya/sdk": "^1.0.0"`. It uses the SDK for Veilnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+
+---
+
+## Identity and Environment Model
+
+An **environment** is the atomic isolation boundary. Each environment has:
+
+- An EVM `owner` address (`msg.sender` at registration)
+- A 128-bit `bytes16` UUID
+- A BLAKE3 hash of the environment ML-DSA-44 public key (`pqPubkeyHash`)
+- An `envType` discriminator: Execution (0), SecureEnclave (1), Governance (2)
+- A `revision` counter and `createdAt` timestamp
+- An `exists` flag (Solidity mappings cannot distinguish unset from zero without it)
+
+**Agents** register under an environment:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `agentUuid` | `bytes16` | Stable identifier |
+| `role` | `uint8` | Coordinator (0), Executor (1), Policy (2) |
+| `pqHash` | `bytes32` | BLAKE3 hash of agent ML-DSA pubkey |
+| `isActive` | bool | Soft-disable without deleting the mapping |
+| `environmentUuid` | `bytes16` | Parent isolation boundary |
+
+Full ML-DSA public keys never appear on-chain. Verifiers fetch keys from local store or out-of-band distribution, then confirm the BLAKE3 fingerprint matches the on-chain hash.
+
+### Mapping derivation (EVM keys, not PDAs)
+
+```
+environments[environmentUuid]
+agents[agentUuid]
+attestations[keccak256(abi.encodePacked(authority, blake3Hash))]
+pqAttestations[executionHash]
+commitments[commitment]
+spendingLimits[agentUuid]
+toolPolicies[keccak256(abi.encodePacked(agentUuid, toolName))]
+nullifiers[memoryId]
+sealedStates[keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))]
+```
+
+```mermaid
+flowchart TB
+    Owner["Owner wallet msg.sender"] --> Env["environments mapping"]
+    Env --> Agent1["agents mapping"]
+    Env --> Agent2["agents mapping"]
+    Agent1 --> Spend["spendingLimits"]
+    Agent1 --> Policy["toolPolicies"]
+    Env --> Null["nullifiers"]
+    Agent1 --> Attest["attestations"]
+```
+
+`registerPqOnchain(envType)` defaults `envType = 1` (SecureEnclave). Pass `0` or `2` explicitly for Execution or Governance.
+
+---
+
+## Execution Attestation Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as Agent Runtime
+    participant PQ as ML-DSA / BLAKE3
+    participant EVM as EvmAnchor
+    participant Chain as Veya.sol
+
+    Agent->>PQ: BLAKE3 payload
+    Agent->>PQ: ML-DSA sign digest
+    Agent->>EVM: attestExecution uuid hash sig
+    EVM->>EVM: ensureRobinhoodChain
+    EVM->>Chain: attestExecution
+    Chain-->>Agent: ExecutionAttested event
+    opt Link identity
+        Agent->>Chain: anchorPqAttestation identityHash executionHash
+    end
+```
+
+**Verification (off-chain):**
+
+1. Fetch the transaction receipt from `https://rpc.testnet.chain.robinhood.com`
+2. Confirm `receipt.to === 0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` (not merely `status === 1`)
+3. Decode `ExecutionAttested` or `CommitmentStored`
+4. Load the agent ML-DSA public key from local store
+5. Confirm `blake3(public_key) == pqHash` on-chain
+6. Call `verifyPQ(sig, blake3HashBytes, publicKey)`
+7. Optionally cross-check against consensus `agreed_blake3_hash`
+
+The chain stores signature bytes up to 4,627 bytes but does not validate them in the EVM. The hosted relayer path often calls `storeCommitment` of the digest rather than stuffing raw ML-DSA bytes into every receipt; both paths are valid evidence if the auditor knows which one was used.
+
+Procedures: [VERIFICATION.md](./VERIFICATION.md)
+
+---
+
+## Consensus Subsystem
+
+```
+                    +-------------+
+                    |  VeyaClient |
+                    | runConsensus|
+                    +------+------+
+                           | POST /execute parallel
+           +---------------+---------------+
+           v               v               v
+    +------------+  +------------+  +------------+
+    | validator  |  | validator  |  | validator  |
+    | alpha:7701 |  | beta:7702  |  | gamma:7703 |
+    +-----+------+  +-----+------+  +-----+------+
+          |               |               |
+          +---------------+---------------+
+                          v
+                 evaluate hashes threshold=2
+                          |
+                          v
+              agreed_blake3_hash if consensus_reached
+```
+
+### Quorum failure modes
+
+| Scenario | `consensus_reached` | Action |
+|----------|---------------------|--------|
+| All nodes agree | `true` | Proceed to attestation |
+| 2-of-3 agree, 1 divergent | `true` | Investigate divergent node; proceed |
+| All hashes differ | `false` | Halt settlement; inspect payloads |
+| 1+ nodes unreachable | depends on remaining responses | Retry or reduce fleet; do not invent agreement |
+| Node returns invalid ML-DSA sig | off-chain detect | Exclude node; do not trust that result |
+
+Invariant: `quorum_hash == local_hash == on_chain_commitment` when an attestation is accepted. A JSON field that claims consensus without three HTTP round-trips is not this SDK.
+
+---
+
