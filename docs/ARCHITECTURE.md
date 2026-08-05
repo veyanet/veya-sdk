@@ -1,627 +1,251 @@
-# Architecture — `@veya/sdk`
+<div align="center">
+  <img src="../assets/logo.png" width="400" alt="VEYA Logo" />
 
-`@veya/sdk` is the official TypeScript client library for the VEYA API. It is a thin, typed HTTP client — no local database, no daemon, no persistent process. It translates TypeScript method calls into authenticated HTTPS requests and surfaces typed response objects back to the caller. All sensitive computation (decentralized consensus execution, Solana anchoring, memory hash registration) is performed by the VEYA validator fleet and gateway API; the SDK handles transport, authentication, input encryption, and response shaping.
+  # VEYA SDK Architecture
 
----
+  **Bounded autonomous systems infrastructure: post-quantum secured on Robinhood Chain.**
 
-## Design Principles
+  [![Robinhood Testnet](https://img.shields.io/badge/Testnet-Chain%20ID%2046630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84)
+  [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
+  [![@veya/sdk](https://img.shields.io/badge/%40veya%2Fsdk-1.0.0-green?style=flat-edge)](../README.md)
 
-The SDK is built around four hard rules:
+  **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
-**1. No secrets in the repository.**
-API keys, passphrases, and JWT tokens are consumed from environment variables or passed at construction time. The SDK never reads from disk, never hard-codes credential values, and never logs auth headers or key material.
-
-**2. Errors always surface as `VeyaError`.**
-Every network failure, timeout, non-2xx HTTP response, and validation error is normalized into a `VeyaError` instance with a `.status` (HTTP code), `.message` (human-readable), and optional `.code` (machine-readable string). Callers only need to handle one error type.
-
-**3. Public routes skip auth headers.**
-Three routes are unconditionally public regardless of SDK config: `/health`, `/auth/nonce` + `/auth/verify`, and `/api/verify/:signature`. The `HttpClient` accepts an `auth: false` option to suppress the auth header for these routes.
-
-**4. Plaintext never crosses the network for sensitive data.**
-Agent configuration objects are encrypted client-side with AES-256-GCM before being sent to the API. Memory content is hashed locally with SHA-256 — only the digest is transmitted. The VEYA API never sees raw agent configs or raw memory content.
+</div>
 
 ---
 
-## Module Layout
+This document describes the end-to-end architecture of `@veya/sdk` (this package, at `@veya/sdk`): **bounded multi-agent coordination** (scoped environments, MCP routing, sealed execution, validator consensus) anchored on **Robinhood Chain** with a **post-quantum security layer** (ML-DSA-44, Kyber-768, BLAKE3-256). The design prioritizes **environment isolation**, **decentralized consensus among operator-run nodes**, **optional hosted API**, and harvest-attack-resistant attestations.
 
-```
-src/
-├── index.ts              Entry point — re-exports the public API surface
-├── config.ts             VeyaConfig type + resolveConfig() with env fallbacks
-├── crypto.ts             AES-256-GCM encrypt/decrypt for agent configs
-│
-├── client/
-│   ├── VeyaClient.ts     The Veya class — composes all 8 resource modules
-│   ├── http.ts           HttpClient — fetch wrapper with auth, timeout, VeyaError
-│   └── index.ts          Re-export barrel
-│
-├── auth/
-│   ├── wallet.ts         walletAuth() — nonce → sign → verify flow
-│   ├── apiKey.ts         API key header helper
-│   └── index.ts          Re-export barrel
-│
-├── modules/
-│   ├── environments.ts   EnvironmentsResource — CRUD for environment workspaces
-│   ├── agents.ts         AgentsResource — deploy, update, encrypt-and-deploy
-│   ├── memory.ts         MemoryResource — ZK hash store + storeContent() helper
-│   ├── executions.ts     ExecutionsResource — standard execution logging
-│   ├── compute.ts        DecentralizedComputeResource — multi-node consensus compute
-│   ├── protection.ts     ProtectionResource — enclave-shielded execution
-│   ├── proofs.ts         ProofsResource — Solana anchoring + verification
-│   ├── solana.ts         SolanaResource — PDA registration + attestation tx builder
-│   └── apiKeys.ts        ApiKeysResource — key create/list/revoke lifecycle
-│
-├── types/
-│   ├── environment.ts    Environment, EnvironmentType, EnvironmentStatus
-│   ├── agent.ts          Agent, AgentType, AgentStatus, DeployAgentInput
-│   ├── execution.ts      Execution, MemoryEntry, ApiKeyRow, ProofAnchor, VerifyProofResult
-│   └── index.ts          Re-export barrel
-│
-└── utils/
-    ├── hash.ts           sha256Hex() and sha256HexSync() — SHA-256 utilities
-    └── encoding.ts       bytesToBase64() and base64ToBytes() — crypto encoding helpers
-```
+The hosted HTTP API at `https://api.veyanet.tech` **imports this SDK**. The SDK itself talks to Robinhood Chain JSON-RPC and to local validator / sealed-node processes. It does not require the API. Integrators who want crypto and settlement in-process use `@veya/sdk` directly.
+
+`Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` is a **protocol contract**. It is not an ERC-20, not a token mint, and not a brokerage wrapper. There is no token address in this product.
 
 ---
 
-## Request Lifecycle
+## Table of Contents
 
-Every SDK call follows the same path from method invocation to typed response:
-
-```mermaid
-sequenceDiagram
-    participant App as Your Application
-    participant Veya as Veya Class
-    participant Resource as Resource Module
-    participant HTTP as HttpClient
-    participant API as VEYA API
-
-    App->>Veya: veya.environments.list()
-    Veya->>Resource: EnvironmentsResource.list()
-    Resource->>HTTP: http.request("/v1/environments")
-    HTTP->>HTTP: Build headers (X-Api-Key or Bearer)
-    HTTP->>HTTP: Set AbortController timeout
-    HTTP->>API: GET /v1/environments
-    API-->>HTTP: { environments: [...] }
-    HTTP->>HTTP: Parse JSON, check res.ok
-    HTTP-->>Resource: typed response object
-    Resource-->>App: Environment[]
-```
-
-If the API returns a non-2xx status, `HttpClient` throws a `VeyaError` before the response reaches the resource module. The caller catches a single normalized error type regardless of what went wrong at the network layer.
-
----
-
-## The `Veya` Class
-
-`Veya` is the single entry point for all SDK operations. It instantiates one `HttpClient` and passes it by reference to all eight resource modules. This means auth state (API key or JWT) is shared across all modules — calling `veya.setAccessToken(token)` switches auth for every subsequent request regardless of which resource module makes it.
-
-```ts
-export class Veya {
-  readonly config: VeyaConfig;
-  private readonly http: HttpClient;
-
-  readonly environments: EnvironmentsResource;
-  readonly agents: AgentsResource;
-  readonly memory: MemoryResource;
-  readonly executions: ExecutionsResource;
-  readonly compute: DecentralizedComputeResource;
-  readonly proofs: ProofsResource;
-  readonly apiKeys: ApiKeysResource;
-  readonly solana: SolanaResource;
-  readonly protection: ProtectionResource;
-
-  constructor(options: Partial<VeyaConfig> = {}) {
-    this.config = resolveConfig(options);
-    this.http = new HttpClient(this.config);
-    // All resource modules share the same HttpClient instance
-    this.environments = new EnvironmentsResource(this.http);
-    this.compute = new DecentralizedComputeResource(this.http);
-    // ...
-  }
-}
-```
-
-The `Veya` class exposes two methods directly (not via a sub-resource):
-- `veya.health()` — calls `GET /health` with `auth: false`
-- `veya.authWithWallet(input)` — runs the wallet sign-in flow and sets the JWT on the shared `HttpClient`
+1. [Executive Summary](#executive-summary)
+2. [Live Testnet Architecture State](#live-testnet-architecture-state)
+3. [Threat Model](#threat-model)
+4. [Architectural Design Philosophy](#architectural-design-philosophy)
+5. [Layered Architecture](#layered-architecture)
+6. [High-Level System Data Flow](#high-level-system-data-flow)
+7. [Component Inventory](#component-inventory)
+8. [Component Deep Dives](#component-deep-dives)
+9. [Identity and Environment Model](#identity-and-environment-model)
+10. [Execution Attestation Flow](#execution-attestation-flow)
+11. [Consensus Subsystem](#consensus-subsystem)
+12. [Sealed Execution Subsystem](#sealed-execution-subsystem)
+13. [Memory and Nullifiers](#memory-and-nullifiers)
+14. [Spending and Policy Enforcement](#spending-and-policy-enforcement)
+15. [Veya.sol Contract Design](#veyasol-contract-design)
+16. [Data Flow Diagrams](#data-flow-diagrams)
+17. [Trust Boundaries](#trust-boundaries)
+18. [Storage Topology](#storage-topology)
+19. [Cryptographic Profile](#cryptographic-profile)
+20. [Operational Deployment Patterns](#operational-deployment-patterns)
+21. [Failure Modes and Recovery](#failure-modes-and-recovery)
+22. [Observability and Audit](#observability-and-audit)
+23. [Extension Points](#extension-points)
+24. [Invariants](#invariants)
+25. [Glossary](#glossary)
 
 ---
 
-## Configuration Resolution
+## Executive Summary
 
-`resolveConfig()` merges explicit options with environment variable fallbacks. This allows zero-config construction in environments where the env vars are set:
+`@veya/sdk` provides three coordinated capabilities that together replace a single trusted coordination server as the source of truth for agent settlement:
 
-```ts
-export function resolveConfig(input: Partial<VeyaConfig> = {}): VeyaConfig {
-  const apiUrl = (input.apiUrl ?? process.env.VEYA_API_URL ?? DEFAULT_API_URL)
-    .replace(/\/$/, ""); // strip trailing slash
-  return {
-    apiUrl,
-    accessToken: input.accessToken,
-    apiKey: input.apiKey,
-    timeoutMs: input.timeoutMs ?? 30_000,
-  };
-}
-```
+1. **On-chain anchoring**: `Veya.sol` on Robinhood Chain stores environment identity fingerprints, BLAKE3 execution commitments, ML-DSA signature metadata, spending limits (wei), tool policies, memory nullifiers, and sealed ciphertext chunks across **10 Solidity functions** and **9 storage record types**.
 
-**Resolution priority for `apiUrl`:**
-1. `options.apiUrl` (explicit)
-2. `process.env.VEYA_API_URL`
-3. `"https://api.veyanet.tech"` (hardcoded default)
+2. **Decentralized compute consensus**: Independent validator nodes at `127.0.0.1:7701`–`7703` execute identical payloads, sign BLAKE3 hashes with ML-DSA-44, and return results. A **2-of-3 quorum** selects the agreed execution hash before optional on-chain attestation.
 
-**Auth header selection in `HttpClient`:**
-1. `apiKey` → sends `X-Api-Key` header
-2. `accessToken` (if no `apiKey`) → sends `Authorization: Bearer` header
-3. Neither → no auth header (only valid for public routes)
+3. **Protected sealed execution**: A sealed-node service at `127.0.0.1:7800` receives AES-256-GCM encrypted payloads, executes inside a process boundary, and produces BLAKE3 ciphertext commitments suitable for `storeSealedState` on-chain data availability.
 
-Calling `setAccessToken(token)` on the client removes the stored `apiKey` and switches to JWT auth for all subsequent requests.
-
----
-
-## HttpClient
-
-`HttpClient` is a minimal wrapper around the browser/Node `fetch` API. It handles:
-
-- **URL construction** — prepends `config.apiUrl` to every path
-- **Auth headers** — `X-Api-Key` or `Authorization: Bearer`, based on config
-- **Content-Type** — automatically sets `application/json` when a body is present
-- **Timeout** — wraps every request in an `AbortController` with `config.timeoutMs` (default 30s)
-- **Response parsing** — reads the body as text, attempts `JSON.parse`, falls back to raw string
-- **Error normalization** — any non-ok response or network failure throws a `VeyaError`
-
-```ts
-const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
-
-try {
-  const res = await fetch(url, { method, headers, body, signal: controller.signal });
-  if (!res.ok) throw new VeyaError(err?.error, res.status, err?.code, data);
-  return data as T;
-} catch (err) {
-  if (err instanceof VeyaError) throw err;
-  if (err instanceof Error && err.name === "AbortError")
-    throw new VeyaError("Request timed out", 408);
-  throw new VeyaError(err instanceof Error ? err.message : "Network error", 0);
-} finally {
-  clearTimeout(timeout);
-}
-```
-
----
-
-## Resource Modules
-
-Each module encapsulates one API domain. All modules receive `HttpClient` via constructor injection — they have no direct access to config, credentials, or each other.
-
-| Module | Class | API Domain | Methods |
-|---|---|---|---|
-| `environments.ts` | `EnvironmentsResource` | `/v1/environments` | `list`, `create`, `get`, `update` |
-| `agents.ts` | `AgentsResource` | `/v1/environments/:id/agents` | `list`, `deploy`, `deployEncrypted`, `update` |
-| `memory.ts` | `MemoryResource` | `/v1/environments/:id/memory` | `list`, `store`, `storeContent`, `purge` |
-| `executions.ts` | `ExecutionsResource` | `/v1/environments/:id/executions` | `list`, `create`, `runStandard` |
-| `compute.ts` | `DecentralizedComputeResource` | `/v1/environments/:id/executions/decentralized` | `run` |
-| `protection.ts` | `ProtectionResource` | `/v1/environments/:id/executions/protected` | `run`, `runWithFieldLists` |
-| `proofs.ts` | `ProofsResource` | `/v1/proofs`, `/api/verify` | `anchorContent`, `anchorText`, `list`, `verifyTransaction` |
-| `solana.ts` | `SolanaResource` | `/v1/solana/...` | `cluster`, `environmentRegistration`, `confirmEnvironmentRegistration`, `agentRegistration`, `confirmAgentRegistration`, `buildUnsignedAttestation` |
-| `apiKeys.ts` | `ApiKeysResource` | `/v1/api-keys` | `list`, `create`, `revoke` |
-
-Most methods are thin wrappers that call `http.request<T>(path, options)` and unwrap one nesting level from the response (e.g. `{ environments: [...] }` → `Environment[]`). Convenience methods like `storeContent`, `runStandard`, and `runWithFieldLists` add local pre-processing (hashing, default-filling) before delegating to the base method.
-
----
-
-## Authentication Flow
-
-### API Key Auth
-
-The simplest auth path. Pass `apiKey` at construction and the SDK handles everything:
+All post-quantum signature **verification** occurs off-chain. The EVM runtime does not execute ML-DSA at production cost; instead, the chain records immutable audit artifacts (`bytes32` hashes and optional signature blobs bounded by `MAX_MLDSA_SIG_LEN = 4627`) that survive long-term quantum adversaries targeting classical curves.
 
 ```mermaid
 flowchart LR
-    A["new Veya({ apiKey })"] --> B["HttpClient stores apiKey"]
-    B --> C["Every request → X-Api-Key header"]
-    C --> D["VEYA API validates key"]
+    subgraph Capabilities["Three Coordinated Capabilities"]
+        A["On-Chain Anchoring\nVeya.sol"]
+        B["Decentralized Consensus\nvalidator-node x3"]
+        C["Sealed Execution\nsealed-node :7800"]
+    end
+    A --> D["Immutable BLAKE3 + ML-DSA audit trail"]
+    B --> D
+    C --> D
+    D --> E["Off-Chain PQ Verification\n@veya/sdk pq module"]
 ```
 
-### Wallet JWT Auth
+The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM). There is no Solana client in this package, no program-derived addresses, and no SPL Memo companion path.
 
-Used in browser environments or when a Solana wallet adapter is available:
+---
+
+## Live Testnet Architecture State
+
+PQ anchoring is **live on Robinhood Chain testnet**. The protocol contract is deployed and receiving writes.
+
+| Field | Value |
+|-------|-------|
+| **Network** | Robinhood Chain Testnet |
+| **Chain ID** | `46630` (`0xb636`) |
+| **RPC** | `https://rpc.testnet.chain.robinhood.com` |
+| **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
+| **Protocol contract** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+| **Contract name** | `Veya.sol` (protocol, not a token) |
+| **Native currency** | ETH (18 decimals, amounts in wei) |
+| **Client library** | ethers v6 (`JsonRpcProvider` + `Contract`) |
+| **Algorithm** | ML-DSA-44 + Kyber-768 + BLAKE3-256 |
+
+### Confirmed transactions
+
+These hashes are live receipts. Open them on the Robinhood testnet explorer; they are not placeholders.
+
+| Operation | Explorer |
+|-----------|----------|
+| Guest content proof (`storeCommitment`) | [0x4314faef…395d](https://explorer.testnet.chain.robinhood.com/tx/0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d) |
+| Sealed-execution commitment | [0xd68ab196…31d8](https://explorer.testnet.chain.robinhood.com/tx/0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8) |
+| PQ / environment registration path | [0x9a00af5e…8ad4](https://explorer.testnet.chain.robinhood.com/tx/0x9a00af5ef80fdefb3734df19ad30b82aa57fa212bd493b7ad5b224a343808ad4) |
+
+Architecture implication: hashes and environment bindings are **permanent audit evidence today**. The hosted API (`https://api.veyanet.tech`) uses a relayer that calls this SDK; operators can also sign with their own `payerPrivateKey` and never touch the API.
+
+`EvmAnchor.ensureRobinhoodChain()` queries `eth_chainId` before every write. If the RPC returns anything other than `46630` (or the configured `chainId`), the SDK refuses to send. That is the guard against pointing this package at another EVM by accident.
+
+---
+
+## Threat Model
+
+### Adversary capabilities
+
+| Adversary | Capability | Mitigation | Residual risk |
+|-----------|------------|------------|---------------|
+| Quantum computer (future) | Grover speedup on hash search | BLAKE3-256 commitments (128-bit post-Grover margin) | Theoretical collision advances |
+| Quantum computer (future) | Shor break of ECDSA / secp256k1 | ML-DSA-44 identity; Kyber-768 sessions | Migration window for legacy Ethereum keys used only as `msg.sender` |
+| Malicious validator node | Return incorrect execution hash | 2-of-3 quorum requires matching BLAKE3 | Collusion of 2+ nodes |
+| Chain observer | Read all on-chain data | Only hashes, metadata, and sealed chunks; PQ keys off-chain | Metadata leakage from events and mapping keys |
+| Compromised agent | Exceed spending or invoke forbidden tools | On-chain wei caps and tool policy mappings; SDK `PolicyAgent` preflight | Off-chain execution before an anchor lands |
+| Replay attacker | Re-submit old memory entries | `flagMemoryNullifier` enforces spend-once | Unanchored local memory in `~/.veya/agent-memory.json` |
+| Harvest-now-decrypt-later | Record classical signatures today | PQ-first identity and BLAKE3 commitments | Pre-migration historical ECDSA receipts |
+| Mis-pointed RPC | Land writes on Ethereum mainnet or another L2 | `ensureRobinhoodChain` chain-id check | Operator who disables the check in a fork |
+| Hosted API compromise | Relayer key spends gas and writes rooms | SDK works without the API; guest JWT cannot drive the relayer | Relayer key remains a high-value secret when the API is used |
+
+### Trust assumptions
+
+| Assumption | Rationale |
+|------------|-----------|
+| Robinhood Chain consensus is honest-majority | Standard L1 / app-chain security model for chain ID 46630 |
+| At least 2 of 3 validators are honest | Byzantine quorum design |
+| Operator secures ML-DSA secret keys | Keys never stored in `Veya.sol` |
+| Off-chain verifiers run `@noble/post-quantum` + `hash-wasm` correctly | SDK supply chain |
+| `eth_chainId` from the configured RPC is truthful | Operators must not pin a lying proxy |
+
+### Out of scope (v1)
+
+- On-chain ML-DSA verification inside the EVM
+- Encrypted mempool or private Robinhood Chain transactions
+- Cross-chain bridging of VEYA state
+- A token, mint, or ERC-20 wrapper around `Veya.sol`
+- Full TFHE / FHE compute (sealed path today is AES-256-GCM + BLAKE3 + ML-DSA)
+- SHA-256 on new SDK commitment paths (Use-mode browser content proofs may hash with SHA-256 for preview; the SDK commitment primitive is BLAKE3)
+
+---
+
+## Architectural Design Philosophy
+
+VEYA inverts the traditional agent-platform model. Security boundaries execute **locally** and **on-chain** rather than exclusively through a trusted remote API. The hosted API is a convenience relayer, not the cryptographic root.
+
+### 1. Post-quantum audit artifacts on Robinhood Chain
+
+Every critical state transition maps to a **BLAKE3-256** digest stored as `bytes32`. ML-DSA-44 detached signatures bind operator intent to those digests. `Veya.sol` mappings and events store immutable evidence: verifiable decades later even if secp256k1 is broken. Ethereum ECDSA still authenticates `msg.sender` for authorization; PQ signatures authenticate **agent identity and execution content**.
+
+### 2. Off-chain verification, on-chain anchoring
+
+| Operation | Where it runs | What lands on-chain |
+|-----------|---------------|---------------------|
+| ML-DSA sign/verify | SDK `pq` module, auditor tooling | Signature bytes in `Attestation.mldsaSig` (optional; hosted relayer often stores the digest only) |
+| Kyber encaps/decaps | SDK coordination transport | Never on-chain |
+| BLAKE3 commitment | Every layer | `bytes32` in mappings / events |
+| Quorum agreement | 3 validator nodes | Agreed hash → `attestExecution` or `storeCommitment` |
+| Chain-id guard | `EvmAnchor.ensureRobinhoodChain` | No write if RPC is not 46630 |
+
+### 3. Environment isolation with policy enforcement
+
+Agents operate inside **typed environments** (`Execution` = 0, `SecureEnclave` = 1, `Governance` = 2). On-chain mappings enforce spending limits in **wei**, tool policy ACLs, and memory nullifiers: spend-once semantics without a central policy server as the sole enforcer. The SDK `PolicyAgent` and `setToolPolicy` mirror those rules locally for preflight.
+
+### 4. Hosted API is optional
+
+```
+Operator ──► @veya/sdk (VeyaClient / EvmAnchor)
+                │
+    ┌───────────┼───────────┬──────────────────┐
+    ▼           ▼           ▼                  ▼
+~/.veya      validators   sealed-node     Robinhood RPC
+memory JSON  :7701-7703   :7800 /protected Veya.sol
+```
+
+Data does not have to flow through `https://api.veyanet.tech`. Validators agree on BLAKE3 execution hashes. The contract anchors commitments. Auditors verify ML-DSA signatures off-chain. When the API **is** used, it calls the same exports (`runConsensus`, `protectedExec`, `EvmAnchor`) so the hosted path is not a second protocol.
+
+---
+
+## Layered Architecture
+
+```
++-------------------------------------------------------------------------+
+|                    Application / Agent Layer                            |
+|         (MCP tools, agent runtimes, robinhood/utility dashboard)        |
++---------------------------------+---------------------------------------+
+                                  |
++---------------------------------v---------------------------------------+
+|                         Integration Layer                               |
+|   @veya/sdk (VeyaClient)  |  https://api.veyanet.tech (optional HTTP API)     |
++----------+--------------------------+------------------+----------------+
+           |                          |                  |
++----------v----------+  +------------v------------+  +--v----------------+
+|  pq/                |  |  compute/consensus.ts   |  |  sealed/          |
+|  ML-DSA, Kyber,     |  |  2-of-3 quorum client   |  |  protectedExec    |
+|  BLAKE3             |  |  POST /execute          |  |  POST /protected  |
++----------+----------+  +------------+------------+  +--+----------------+
+           |                          |                  |
++----------v--------------------------v------------------v----------------+
+|              Local persistence (~/.veya/agent-memory.json)              |
+|                    environments, agents, memory entries                 |
++---------------------------------+---------------------------------------+
+                                  |
++---------------------------------v---------------------------------------+
+|              Robinhood Chain: Veya.sol (10 functions)                  |
+|   Environment | Agent | Attestation | PqAttestation | Commitment        |
+|   SpendingLimit | ToolPolicy | Nullifier | SealedState                  |
++-------------------------------------------------------------------------+
+```
+
+Each layer depends only on layers below it. `VeyaClient` constructed without `payerPrivateKey` still hashes, runs consensus, and calls sealed-node. Writes require a funded key and a matching chain id.
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant SDK as Veya SDK
-    participant API as VEYA API
-    participant Wallet as Solana Wallet
-
-    App->>SDK: veya.authWithWallet({ wallet, signMessage })
-    SDK->>API: GET /auth/nonce?wallet=<PUBKEY>
-    API-->>SDK: { message: "Sign in to VEYA: <nonce>" }
-    SDK->>Wallet: signMessage(messageBytes)
-    Wallet-->>SDK: signatureBytes (Uint8Array)
-    SDK->>SDK: bs58.encode(signatureBytes)
-    SDK->>API: POST /auth/verify { wallet, message, signature }
-    API-->>SDK: { token, expiresIn }
-    SDK->>SDK: http.setAccessToken(token)
-    SDK-->>App: WalletAuthResult
-```
-
-After `authWithWallet` completes, all subsequent requests on that client instance automatically use `Authorization: Bearer <token>`. The wallet adapter's `signMessage` callback receives `Uint8Array` message bytes and must return `Uint8Array` signature bytes — standard for Solana wallet adapters (Phantom, Backpack, Solflare).
-
----
-
-## Client-Side Cryptography
-
-### Agent Config Encryption (AES-256-GCM)
-
-Agent configurations can contain sensitive tooling rules, budget constraints, or private routing parameters. Before deploying an agent with such data, the SDK encrypts the config object client-side using AES-256-GCM via the Web Crypto API (`node:crypto` → `webcrypto.subtle`).
-
-```mermaid
-flowchart TD
-    A["Plain config object\n{ allowedTools, maxBudget }"] --> B["JSON.stringify()"]
-    B --> C["TextEncoder → Uint8Array"]
-    C --> D["AES-256-GCM encrypt\nwith passphrase-derived key"]
-    D --> E["bytesToBase64(ciphertext)\n→ encryptedConfig"]
-    D --> F["bytesToBase64(12-byte IV)\n→ configIv"]
-    E --> G["POST to VEYA API\nonly ciphertext + IV sent"]
-    F --> G
-```
-
-**Key derivation:** The passphrase is padded or trimmed to exactly 32 bytes using `String.prototype.padEnd(32, '0').slice(0, 32)` after being normalized with `.trim()`. This 32-byte buffer is imported as a raw AES-256-GCM key via `subtle.importKey`. The passphrase must be at least 8 characters.
-
-**Decryption:** `decryptAgentConfig(encryptedConfig, configIv, passphrase)` reverses the process entirely locally. Neither the passphrase nor the plaintext config ever leaves the client environment.
-
-### Zero-Knowledge Memory Hashing (SHA-256)
-
-Memory content is hashed locally before any network call is made:
-
-```ts
-// memory.storeContent() — content never leaves the client
-async storeContent(environmentId, scope, content, options) {
-  const contentHash = await sha256Hex(content); // local hash only
-  return this.store(environmentId, { scope, contentHash, ...options });
-}
-```
-
-`sha256Hex` uses `webcrypto.subtle.digest("SHA-256", ...)` in async environments and a synchronous `createHash("sha256")` fallback in Node.js via `sha256HexSync`. The result is a 64-character lowercase hex string.
-
----
-
-## Type System
-
-All API response shapes are defined as TypeScript interfaces in `src/types/`. The type system uses strict TypeScript unions for enumerable values:
-
-```ts
-type EnvironmentType =
-  | "research" | "governance" | "treasury"
-  | "contributor" | "protocol" | "desci";
-
-type AgentType =
-  | "research" | "coordination" | "memory"
-  | "policy" | "presence" | "finance";
-
-type AgentStatus = "active" | "idle" | "executing" | "error";
-type EnvironmentStatus = "active" | "paused" | "archived";
-```
-
-A runtime type guard is provided for `EnvironmentType`:
-
-```ts
-export function isEnvironmentType(value: string): value is EnvironmentType {
-  return ["research","governance","treasury","contributor","protocol","desci"]
-    .includes(value);
-}
-```
-
-All types are re-exported from `src/index.ts` via `export type * from "./types/index.js"` and are available to SDK consumers at the top-level import path.
-
----
-
-## Build & Distribution
-
-The SDK is built with `tsup` and ships dual ESM + CJS bundles with TypeScript declaration files:
-
-| Output | Path | Use Case |
-|---|---|---|
-| ESM module | `dist/index.js` | Node.js ESM, bundlers (Vite, webpack, Rollup) |
-| CJS module | `dist/index.cjs` | CommonJS environments, older tooling |
-| Type declarations | `dist/index.d.ts` | TypeScript consumers |
-
-The `package.json` `exports` field routes module resolution automatically:
-```json
-{
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
-    }
-  }
-}
-```
-
-The only runtime dependency is `bs58` (for base58 encoding of Solana wallet signatures). Everything else — `node:crypto`, `fetch`, `AbortController` — is part of Node.js 18+ and modern browsers natively.
-
----
-
-## Zero-Knowledge Memory Model — Deep Dive
-
-The memory subsystem is one of the most architecturally significant parts of the SDK because it enforces a strict privacy boundary entirely in client code. The VEYA API acts purely as a hash registry — it stores content digests but has no cryptographic ability to reconstruct the original content from them.
-
-### What Gets Transmitted vs. What Stays Local
-
-When you call `veya.memory.storeContent()`, the SDK executes the following steps entirely on the caller's machine before any network call is made:
-
-```ts
-async storeContent(environmentId, scope, content, options) {
-  // Step 1 — hash locally using Web Crypto SHA-256
-  const contentHash = await sha256Hex(content);
-
-  // Step 2 — only the hash goes over the wire
-  return this.store(environmentId, {
-    scope,
-    contentHash,   // 64-char hex — this is all the API receives
-    agentId: options.agentId,
-    metadata: options.metadata,
-  });
-}
-```
-
-The raw `content` string — which might be a prompt template, a system instruction, a private configuration note, or a database query — never touches the network. The VEYA API receives only:
-
-- `scope` — a namespace string you define (e.g. `"agent-prompts"`, `"session-logs"`)
-- `contentHash` — the 64-character SHA-256 hex digest
-- `agentId` — optional association
-- `metadata` — arbitrary caller-defined JSON
-
-### Verification Use Case
-
-Because the hash is publicly anchored in the VEYA registry, any agent or system that holds the original plaintext can verify it has not been tampered with by re-hashing and comparing:
-
-```ts
-import { sha256Hex } from "@veya/sdk";
-
-const localContent = await readFromLocalStore(memoryId);
-const localHash = await sha256Hex(localContent);
-
-const entries = await veya.memory.list(environmentId, "agent-prompts");
-const registeredEntry = entries.find((e) => e.id === memoryId);
-
-if (registeredEntry?.contentHash !== localHash) {
-  throw new Error("Memory integrity check failed — content has been modified.");
-}
-```
-
-This pattern is particularly useful in multi-agent coordination scenarios where one agent needs to verify that a shared memory record has not been altered between write and read operations.
-
-### Scope Design
-
-The `scope` field is a free-form string (1–64 characters). Use it to partition memory entries by purpose, agent type, or session identifier:
-
-| Scope Pattern | Example | Use Case |
-|---|---|---|
-| Feature-based | `"agent-prompts"` | System prompt templates per agent type |
-| Session-based | `"session:abc123"` | Ephemeral context for a single agent run |
-| Agent-based | `"agent:finance:config"` | Agent-specific configuration hashes |
-| Audit-based | `"audit:2025-01"` | Monthly compliance record hashes |
-
----
-
-## Solana Integration — Mechanics
-
-The SDK integrates with Solana in two distinct ways: **SPL Memo anchoring** (for proof records) and **PDA registration** (for environment and agent identity). These serve different purposes and go through different API routes.
-
-### SPL Memo Anchoring — Proof Records
-
-When you call `veya.proofs.anchorContent()`, the VEYA API's Solana relayer submits a transaction containing a single SPL Memo instruction. The memo payload is a UTF-8 JSON string embedding the content hash:
-
-```json
-{ "veya": "1.0", "hash": "5a6b7c8d...", "label": "Board vote", "uri": "https://..." }
-```
-
-Because Solana memo instructions are part of the permanent transaction log on every validator node, the hash becomes globally queryable by anyone with the transaction signature — no VEYA API access required. The `veya.proofs.verifyTransaction(signature)` method exploits this by making a public call to `/api/verify/:signature` which itself queries a Solana RPC node, not any internal database.
-
-```mermaid
-flowchart LR
-    A["veya.proofs.anchorContent()"] --> B["VEYA Relayer\n(Gas Payer Wallet)"]
-    B --> C["Solana Network\nSPL Memo TX"]
-    C --> D["Permanent Ledger\nTransaction History"]
-    D --> E["veya.proofs.verifyTransaction()\n(public — no auth)"]
-```
-
-### PDA Registration — Environment & Agent Identity
-
-Program Derived Addresses (PDAs) give environments and agents a deterministic on-chain identity that is independent of any specific wallet or private key. The registration flow is split across two SDK calls:
-
-**Step 1 — Fetch unsigned transaction:**
-```ts
-const { registration } = await veya.solana.environmentRegistration(env.id);
-// `registration` contains the serialized, unsigned Solana transaction
-```
-
-**Step 2 — Sign with wallet adapter and broadcast:**
-```ts
-// Your wallet adapter (Phantom, Backpack, Solflare) signs the serialized tx
-const signature = await walletAdapter.sendTransaction(deserialize(registration));
-```
-
-**Step 3 — Confirm with VEYA API:**
-```ts
-const { environmentPda } = await veya.solana.confirmEnvironmentRegistration(
-  env.id,
-  signature
-);
-// The VEYA API now knows the on-chain PDA address for this environment
-```
-
-This three-step pattern keeps the SDK transport-agnostic — the SDK never holds a private key or submits transactions itself. It provides the unsigned payload; the caller's wallet infrastructure handles signing and broadcasting.
-
-### Unsigned Attestation Transactions
-
-`veya.solana.buildUnsignedAttestation()` is used when you want to attach an SPL Memo attestation to an existing execution without using the VEYA relayer as the gas payer. Instead, you supply a `feePayer` public key and the API returns a serialized, unsigned transaction that your own wallet signs and broadcasts:
-
-```ts
-const { hash, serialized, uri } = await veya.solana.buildUnsignedAttestation(
-  { amount: 1_000_000, action: "treasury.transfer", agentId: agent.id },
-  myWalletPublicKey
-);
-
-// `serialized` is a base64-encoded Solana VersionedTransaction
-const txBytes = Buffer.from(serialized, "base64");
-const signature = await myWallet.signAndSendTransaction(txBytes);
+flowchart TB
+    subgraph L5["L5: Application"]
+        MCP["MCP / Veilnet tools"]
+        Agents["Agent runtimes"]
+        Dash["robinhood/utility"]
+    end
+    subgraph L4["L4: Integration"]
+        SDK["@veya/sdk"]
+        API["https://api.veyanet.tech optional"]
+    end
+    subgraph L3["L3: Compute and Crypto"]
+        Crypto["pq/ ML-DSA Kyber BLAKE3"]
+        Consensus["runConsensus"]
+        Sealed["protectedExec"]
+    end
+    subgraph L2["L2: Persistence"]
+        Store["~/.veya/agent-memory.json"]
+    end
+    subgraph L1["L1: Settlement"]
+        Chain["Veya.sol on chain 46630"]
+    end
+    L5 --> L4 --> L3 --> L2 --> L1
+    API --> SDK
 ```
 
 ---
-
-## Environment & Agent Data Model
-
-### Environments
-
-An environment is the top-level organizational unit in VEYA. It acts as a namespace that owns agents, memory entries, and execution records. Every environment has:
-
-- **`ownerWallet`** — the Solana public key of the account that created it, used to verify ownership during Solana PDA registration.
-- **`type`** — one of six predefined strings that classify the environment's operational purpose (`treasury`, `governance`, `research`, `contributor`, `protocol`, `desci`). The type is used by the API to apply default policy templates.
-- **`spendingLimits`** — a JSON object defining per-period Solana spend budgets, checked by the API before every execution that carries a non-zero `spendLamports` value.
-- **`policyConfig`** — a JSON object for environment-wide policy enforcement rules (e.g. maximum number of agents, allowed event types).
-- **`agentRoster`** — a list of agent UUIDs registered to this environment. Agents outside the roster cannot execute within the environment.
-- **`memoryScope`** — a JSON config object that governs memory namespace rules for the environment.
-
-### Agents
-
-Agents are isolated execution principals within an environment. Each agent has:
-
-- **`type`** — one of six strings (`research`, `coordination`, `memory`, `policy`, `presence`, `finance`) that categorize the agent's role and determine which tools it is allowed to invoke.
-- **`permissionConfig`** — the primary access control object. Contains `allowedTools`, scope restrictions, and any agent-specific policy overrides.
-- **`encryptedConfig` + `configIv`** — if the agent was deployed via `agents.deployEncrypted()` or with explicit AES fields, this contains the AES-256-GCM ciphertext and IV. The VEYA API stores these opaque blobs and returns them on agent fetch; it cannot decrypt them.
-- **`spendThisPeriod`** — a running total of lamports spent in the current spending period, used by the API for budget enforcement.
-- **`agentKind`** — an optional free-form classifier for custom agent taxonomy beyond the six built-in types.
-
-### Execution Records
-
-Every agent action — whether standard or protected — is recorded as an immutable `Execution` entry:
-
-- **`eventType`** — a caller-defined dot-notation string (e.g. `"treasury.transfer"`, `"memory.verify"`) that categorizes the action for audit querying.
-- **`payload`** — the full execution context parameters. For protected executions, sealed fields are returned as hashes rather than plaintext.
-- **`protected`** — boolean flag. `true` indicates the execution was routed through an isolated secure enclave.
-- **`commitmentHash`** — if `commitResult: true` was set, this is the SHA-256 hash of the execution output that was anchored on Solana.
-- **`attestationTx`** — the Solana transaction signature for the on-chain commitment, if applicable.
-
----
-
-## SDK Extension Patterns
-
-### Adding a New Resource Module
-
-If the VEYA API adds a new resource namespace, extending the SDK follows a consistent four-step pattern:
-
-**1. Define input/output types in `src/types/`:**
-```ts
-// src/types/webhook.ts
-export interface Webhook {
-  id: string;
-  url: string;
-  events: string[];
-  createdAt: string;
-}
-```
-
-**2. Create the resource module in `src/modules/`:**
-```ts
-// src/modules/webhooks.ts
-import type { HttpClient } from "../client/http.js";
-import type { Webhook } from "../types/webhook.js";
-
-export class WebhooksResource {
-  constructor(private readonly http: HttpClient) {}
-
-  async list(): Promise<Webhook[]> {
-    const { webhooks } = await this.http.request<{ webhooks: Webhook[] }>("/v1/webhooks");
-    return webhooks;
-  }
-
-  async create(input: { url: string; events: string[] }): Promise<Webhook> {
-    const { webhook } = await this.http.request<{ webhook: Webhook }>("/v1/webhooks", {
-      method: "POST",
-      body: input,
-    });
-    return webhook;
-  }
-}
-```
-
-**3. Register on `VeyaClient`:**
-```ts
-// src/client/VeyaClient.ts
-import { WebhooksResource } from "../modules/webhooks.js";
-
-export class Veya {
-  readonly webhooks: WebhooksResource;
-
-  constructor(options: Partial<VeyaConfig> = {}) {
-    // ...
-    this.webhooks = new WebhooksResource(this.http);
-  }
-}
-```
-
-**4. Export the type from `src/index.ts`:**
-```ts
-export type { Webhook } from "./types/webhook.js";
-```
-
----
-
-## Testing Architecture
-
-The SDK ships with a Vitest test suite covering the five core subsystems. All tests mock the `fetch` global to avoid real network calls.
-
-### Test Files
-
-| File | What It Tests |
-|---|---|
-| `tests/auth.test.ts` | `walletAuth()` — nonce fetch, signMessage callback, verify POST, token injection |
-| `tests/client.test.ts` | `HttpClient` — header construction, timeout abort, VeyaError mapping, auth priority |
-| `tests/environments.test.ts` | `EnvironmentsResource` — list/create/get/update response unwrapping |
-| `tests/compute.test.ts` | `DecentralizedComputeResource` — multi-node consensus execution |
-| `tests/proofs.test.ts` | `ProofsResource` — anchorContent, verifyTransaction (auth: false), list |
-| `tests/protection.test.ts` | `ProtectionResource` — run(), runWithFieldLists() defaults |
-
-### Running Tests
-
-```bash
-# Run all tests once
-npm run test
-
-# Run in watch mode
-npm run test:watch
-
-# Type-check without building
-npm run lint
-```
-
-### Mocking Pattern
-
-Tests intercept `fetch` at the global level using Vitest's `vi.stubGlobal`:
-
-```ts
-vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-  ok: true,
-  text: async () => JSON.stringify({ environments: [] }),
-}));
-```
-
-This ensures tests run in under 100ms with no external dependencies.
-
----
-
-## Related
-
-- [api-map.md](./api-map.md) — Full HTTP route reference
-- [authentication.md](./authentication.md) — Auth flows in depth
-- [crypto.md](./crypto.md) — AES-256-GCM and SHA-256 utility reference
-- [error-handling.md](./error-handling.md) — `VeyaError`, status codes, and retry patterns
-- [decentralized-compute.md](./decentralized-compute.md) — Consensus multi-node compute guide
-- [memory.md](./memory.md) — Zero-knowledge memory guide
-- [solana.md](./solana.md) — Solana PDA registration and attestation
-- [types-reference.md](./types-reference.md) — All TypeScript interfaces and type definitions
 
