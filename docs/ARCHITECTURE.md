@@ -797,3 +797,213 @@ No VEYA-hosted service is **required** inside the trust boundary. When the API i
 
 ---
 
+## Storage Topology
+
+| Data | Location | Format | Retention |
+|------|----------|--------|-----------|
+| Environment roster (local) | `~/.veya/agent-memory.json` | JSON | Operator-managed |
+| Agent memory | same file | JSON + BLAKE3 | Operator-managed |
+| PQ secret keys | Operator custody | Never on-chain | Rotate on compromise |
+| Execution attestations | `Veya.sol` mappings | Solidity structs | Permanent on-chain |
+| Commitments | `commitments[bytes32]` | `bytes32` + timestamp | Permanent on-chain |
+| Sealed ciphertext | mappings + sealed-node | Binary chunks ≤8192 B | Permanent + ephemeral |
+| Consensus results | SDK return value / API row | JSON `NodeResult[]` | Match attestation retention |
+| Live receipts | Explorer + RPC | Transaction hash | Permanent |
+
+---
+
+## Cryptographic Profile
+
+| Operation | Algorithm | Standard |
+|-----------|-----------|----------|
+| Identity signatures | ML-DSA-44 | NIST FIPS 204 |
+| Session KEM | Kyber-768 (ML-KEM-768) | NIST FIPS 203 |
+| Commitments | BLAKE3-256 | Grover-resistant margin |
+| Sealed payload encryption | AES-256-GCM | NIST SP 800-38D |
+| Transaction authorization | secp256k1 ECDSA | Ethereum `msg.sender` |
+| Node attestations | ML-DSA-44 over BLAKE3 | validator-node |
+
+Ethereum ECDSA authorizes **who paid gas**. ML-DSA authorizes **which agent identity bound which digest**. Mixing those two is a design feature, not a contradiction.
+
+Deep dive: [POST_QUANTUM.md](./POST_QUANTUM.md)
+
+---
+
+## Operational Deployment Patterns
+
+### Local development
+
+1. `npm install && npm run build`
+2. Start three `validator-node` instances on ports 7701–7703
+3. Start one `sealed-node` on port 7800
+4. Construct `VeyaClient` with default `validatorNodes` and `sealedNodeUrl`
+5. Hash and run consensus without a private key
+6. For writes, set `VEYA_DEPLOYER_PRIVATE_KEY` to a funded testnet wallet
+
+### Testnet anchoring (live today)
+
+```bash
+export ROBINHOOD_RPC_URL="https://rpc.testnet.chain.robinhood.com"
+export ROBINHOOD_CHAIN_ID=46630
+export VEYA_CONTRACT_ADDRESS="0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"
+export VEYA_DEPLOYER_PRIVATE_KEY="0x..."   # funded; never commit
+```
+
+```typescript
+const client = new VeyaClient({ payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY });
+const result = await client.registerPqOnchain(1);
+console.log(result.explorer.environment, result.explorer.memo);
+```
+
+### Production considerations
+
+- Keep `ensureRobinhoodChain` enabled
+- Run validator nodes on separate hosts
+- HSM or enclave custody for ML-DSA secret keys
+- Monitor `revision` on environments for policy drift
+- Archive receipts (`to` must be Veya.sol) for compliance retention
+- Treat the hosted relayer key as production infrastructure, not as a shared demo wallet
+- Fund the payer in **ETH wei** on chain 46630; there is no airdrop helper inside this SDK
+
+### Hosted API pattern
+
+`https://api.veyanet.tech` sets `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL`, imports `@veya/sdk`, and relays `storeCommitment` when a room has a 16-byte environment id. Guest JWT cannot create environments or drive the relayer. Direct SDK users skip this pattern.
+
+---
+
+## Failure Modes and Recovery
+
+### Consensus failures
+
+| Failure | Symptom | Root cause | Recovery |
+|---------|---------|------------|----------|
+| Quorum not reached | `consensus_reached: false` | Divergent hashes or node outage | Retry with healthy nodes; compare per-node hashes |
+| Node timeout | Partial `node_results` | Network or overloaded node | Increase timeout; restart node |
+| Invalid node signature | Off-chain verify fails | Compromised or misconfigured node | Exclude node; rotate node ML-DSA key |
+| Payload canonicalization drift | All hashes differ | JSON key ordering mismatch | Stable serialize; same object on all nodes |
+
+### On-chain failures
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| Signature too large | `SignatureTooLarge` | Use ML-DSA-44; sign BLAKE3 digest not raw payload |
+| Spending cap hit | `SpendingLimitExceeded` | Wait for period rollover or raise cap via owner |
+| Memory already nullified | `MemoryAlreadyNullified` | Allocate new `memoryId` |
+| Sealed chunk oversized | `SealedChunkTooLarge` | Split ciphertext into ≤8192 byte chunks |
+| Unauthorized signer | `Unauthorized` | Verify environment owner |
+| Wrong chain | SDK throws expected-chain-id error | Point RPC at Robinhood testnet 46630 |
+| Duplicate commitment | `CommitmentAlreadyExists` | Read existing mapping; do not retry same digest |
+| `eth_estimateGas` revert | Preflight fails | Decode custom error; check environment exists |
+
+### Infrastructure failures
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| RPC unavailable | SDK transaction timeout | Failover RPC; resubmit with fresh nonce |
+| Local memory file locked | Write error | Close concurrent processes using `~/.veya` |
+| sealed-node crash | HTTP 502 / connection reset | Restart daemon; check logs |
+| Insufficient ETH | `INSUFFICIENT_FUNDS` | Fund the payer on chain 46630 |
+| Relayer drained | API 503 on commit | Fund relayer; or sign with operator key via SDK |
+
+### Cryptographic failures
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| PQ verify failed | `verifyPQ` returns false | Ensure signature covers 32-byte BLAKE3 hash |
+| Identity mismatch | `blake3(pk) != on_chain_hash` | Re-register agent or load correct pubkey |
+| Kyber decaps failure | Shared secrets diverge | Re-encapsulate; verify keypair match |
+
+```mermaid
+flowchart TD
+    F["Failure detected"] --> C{"Category?"}
+    C -->|Consensus| Q["Inspect node hashes\nrestart fleet"]
+    C -->|On-chain| S["Check VeyaSdkError\ncustom selector"]
+    C -->|Infra| I["RPC failover\nrestart nodes"]
+    C -->|Crypto| P["Re-verify canonicalization\nkey material"]
+    Q --> R["Retry operation"]
+    S --> R
+    I --> R
+    P --> R
+```
+
+---
+
+## Observability and Audit
+
+| Signal | Source | Use |
+|--------|--------|-----|
+| Transaction hashes | RPC / explorer | Immutable audit trail |
+| `explorerTxUrl(hash)` | SDK helper | Operator-facing links |
+| Validator logs | `validator-node` stderr | Quorum divergence diagnosis |
+| `revision` on Environment | On-chain | Policy drift detection |
+| `VeyaSdkError.code` | SDK | Machine-readable failure class |
+| Live receipts | Listed above | Regression baseline |
+
+Audit checklist:
+
+1. Confirm receipt `to` equals `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`
+2. Confirm `status === 1` and logs decode to the expected event
+3. Verify BLAKE3 digest matches off-chain recomputation
+4. Verify ML-DSA signature over digest when sig bytes are present
+5. Cross-check consensus quorum hash if applicable
+6. Archive transaction hash, block number, and `block.timestamp`
+
+Procedures: [VERIFICATION.md](./VERIFICATION.md)
+
+---
+
+## Extension Points
+
+| Extension | Location | Status |
+|-----------|----------|--------|
+| Additional environment types | `EnvironmentType` enum | Requires contract migration |
+| Hosted relayer `attestExecution` with raw ML-DSA bytes | API + `EvmAnchor` | Contract and SDK ready; relayer often uses `storeCommitment` |
+| On-chain PQ verify | Future precompile research | Out of scope v1 |
+| Cross-environment policy | Composite keys | Not in v1 |
+| TFHE homomorphic ops | sealed-node | Not claimed as live |
+
+Do not invent a token address, a second protocol contract, or a Solana companion program as an extension of this SDK.
+
+---
+
+## Invariants
+
+The following statements are true of a correctly configured `@veya/sdk` deployment. An auditor who finds a counterexample should reject the deployment, not patch the docs.
+
+1. **Chain identity.** Every successful `EvmAnchor` write was preceded by `eth_chainId == 46630` (or the explicitly configured `chainId`).
+2. **Contract identity.** Every settlement receipt’s `to` field is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. A transfer of ETH to another address is not a VEYA proof.
+3. **No token.** `Veya.sol` does not implement ERC-20. There is no token address to document.
+4. **Commitment algorithm.** New SDK commitment paths hash with BLAKE3-256. The digest is 32 bytes / 64 hex chars.
+5. **Identity algorithm.** Agent and validator identity is ML-DSA-44. Ethereum ECDSA is only `msg.sender`.
+6. **Quorum.** `consensus_reached` is true only when at least two live `/execute` responses share a BLAKE3 hash.
+7. **Sealed fail-closed.** A protected execution that did not reach `:7800` is an error, not a success with empty ciphertext.
+8. **Environment binding.** A commitment is stored under a `bytes16` environment UUID that already exists. Global junk-drawer hashes are not the product.
+9. **Spend units.** Caps are wei of native ETH on Robinhood Chain.
+10. **Hosted API optional.** All of the above hold when the caller never starts `https://api.veyanet.tech`.
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Anchor** | A `Veya.sol` write that stores VEYA settlement state on Robinhood Chain |
+| **Attestation** | BLAKE3 execution commitment optionally accompanied by ML-DSA sig bytes |
+| **Environment** | Isolation boundary for agents, memory, and policies (`bytes16` UUID) |
+| **EvmAnchor** | SDK class that submits ethers v6 transactions after a chain-id check |
+| **Nullifier** | On-chain flag marking a memory entry as consumed |
+| **PQ** | Post-quantum: algorithms resistant to Shor/Grover attacks |
+| **Quorum** | Minimum agreeing validator count (default 2 of 3) |
+| **Relayer** | Optional `https://api.veyanet.tech` wallet that pays gas using this SDK |
+| **Sealed execution** | AES-encrypted payload processing with commitment output |
+| **Veya.sol** | Protocol contract at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`: not a token |
+| **Wei** | 1e-18 ETH; unit of `initSpendingLimit` / `recordSpend` |
+| **Chain ID 46630** | Robinhood Chain Testnet |
+
+---
+
+<div align="center">
+
+*Cryptographic primitives: [POST_QUANTUM.md](./POST_QUANTUM.md) • Operator tutorial: [QUICKSTART.md](./QUICKSTART.md) • Auditor procedures: [VERIFICATION.md](./VERIFICATION.md)*
+
+</div>
