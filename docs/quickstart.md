@@ -508,3 +508,222 @@ flowchart LR
 
 ---
 
+## 13. Run Tests
+
+```bash
+npm install
+npm test
+npm run lint
+```
+
+Unit tests pin chain id `46630`, explorer host, `VEYA_CONTRACT_ADDRESS`, ABI camelCase function names, and the absence of Solana-style `register_environment`. PQ tests round-trip ML-DSA sign/verify and BLAKE3.
+
+Live RPC writes are **not** part of unit tests. They need a funded key. The hosted tree covers them with `https://api.veyanet.tech/scripts/live-ship-check.ts`.
+
+| Suite | Command | Scope |
+|-------|---------|-------|
+| SDK unit | `npm test` | Chain defaults, ABI, PQ roundtrip |
+| Typecheck | `npm run lint` | `tsc --noEmit` |
+| Live ship | live-ship-check | Funded RPC + nodes |
+
+---
+
+## 14. Use With the Hosted API
+
+The SDK does not depend on a hosted API server.
+
+When you **do** run the API:
+
+1. Point `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL` at the same local fleet
+2. Fund the relayer wallet on chain 46630
+3. Keep guest JWT off write routes (guest may verify proofs; guest may not drive `registerEnvironment`)
+4. Confirm receipts with `receipt.to === Veya.sol`, not merely `status === 1`
+
+The dashboard (`robinhood/utility`) talks HTTP to the API. Integrators who want crypto + chain in-process skip both and import `@veya/sdk`.
+
+If the API is down, this quickstart still works: you have Node, three validators, one sealed-node, and a payer key.
+
+---
+
+## 15. End-to-End Lifecycle Diagram
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant SDK as VeyaClient
+    participant PQ as pq module
+    participant Val as Validators 7701-7703
+    participant Seal as sealed-node 7800
+    participant Chain as Robinhood 46630
+
+    Op->>SDK: new VeyaClient
+    Op->>SDK: pqKeygen / hashBlake3
+    SDK->>PQ: ML-DSA-44 + BLAKE3
+    PQ-->>Op: pubkey fingerprint
+    Op->>Val: runConsensus
+    Val-->>SDK: NodeResults
+    SDK->>SDK: threshold 2
+    Op->>Seal: protectedExecute
+    Seal-->>SDK: SealedExecResult
+    Op->>Chain: registerPqOnchain
+    Chain-->>Op: environmentTx + commitment tx
+    Op->>SDK: explorerFor txHash
+```
+
+---
+
+## 16. Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROBINHOOD_RPC_URL` | public testnet RPC | JSON-RPC |
+| `ROBINHOOD_CHAIN_ID` | `46630` | Must match `eth_chainId` |
+| `ROBINHOOD_EXPLORER_URL` | testnet explorer origin | Link helper |
+| `VEYA_CONTRACT_ADDRESS` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Protocol contract |
+| `VEYA_DEPLOYER_PRIVATE_KEY` |: | Hex key; never commit |
+| `VEYA_VALIDATOR_NODES` | localhost 7701–7703 | Comma-separated origins |
+| `VEYA_SEALED_NODE_URL` | `http://127.0.0.1:7800` | Sealed execution |
+
+### Recommended testnet shell
+
+```bash
+export ROBINHOOD_RPC_URL="https://rpc.testnet.chain.robinhood.com"
+export ROBINHOOD_CHAIN_ID=46630
+export VEYA_CONTRACT_ADDRESS="0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"
+export VEYA_VALIDATOR_NODES="http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703"
+export VEYA_SEALED_NODE_URL="http://127.0.0.1:7800"
+# export VEYA_DEPLOYER_PRIVATE_KEY=0x...   # funded; local only
+```
+
+There is no Solana cluster variable, no program id, and no memo program id in this package.
+
+---
+
+## 17. Troubleshooting
+
+### Install and build
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Node too old | engine warning / ESM errors | Install Node 20+ |
+| SDK build fails | tsup / types | `rm -rf node_modules dist && npm install && npm run build` |
+| Example cannot import | path vs package name | Run from `@veya/sdk` with `npx tsx examples/quickstart.ts` |
+
+### Consensus
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| `consensus_reached: false` | No agreed hash | Ensure all three validator nodes are running on 7701–7703 |
+| Node connection refused | `fetch` failed | Start `validator-node`; verify localhost firewall |
+| Divergent hashes | Quorum fails with different hashes | Use identical payload objects; check canonical JSON |
+| Node timeout | Partial `node_results` | Restart overloaded node; confirm `/execute` |
+
+### Sealed execution
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| `sealed-node error: 500` | HTTP 500 | Check sealed-node logs; verify port 7800 is free |
+| Connection refused | ECONNREFUSED | Start `sealed-node` before `protectedExecute` |
+| Invalid environment | 403 | Register the environment UUID on-chain and locally |
+
+### Robinhood Chain
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Chain mismatch | expected chain id 46630 | Point RPC at `rpc.testnet.chain.robinhood.com` |
+| Insufficient funds | ethers `INSUFFICIENT_FUNDS` | Fund the payer with ETH on chain 46630 |
+| Wrong `to` on receipt | Proof looks confirmed | Require `receipt.to === Veya.sol` |
+| `CommitmentAlreadyExists` | Retry of same digest | Read the mapping; do not resubmit |
+| `EnvironmentDoesNotExist` | Attest before register | `registerEnvironment` first |
+| RPC rate limit | HTTP 429 | Back off; dedicated RPC if you have one |
+| `eth_estimateGas` revert | Preflight fails | Decode `VeyaSdkError` / custom error selector |
+
+### Cryptography
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| PQ verify failed | `verifyPQ` false | Sign the **BLAKE3 hash bytes** (32), not hex text |
+| Identity mismatch | Hash comparison fails | Reload the matching ML-DSA pubkey |
+| Kyber mismatch | Shared secrets differ | Same public key on encapsulate and decapsulate |
+
+### Recovery flowchart
+
+```mermaid
+flowchart TD
+    E["Error encountered"] --> T{"Category?"}
+    T -->|Build| B["Node 20+ reinstall deps"]
+    T -->|Consensus| C["Restart 7701-7703"]
+    T -->|Sealed| S["Restart sealed-node 7800"]
+    T -->|Chain| D["Fund payer confirm chain 46630"]
+    T -->|Crypto| P["Sign digest not payload"]
+    B --> R["Retry"]
+    C --> R
+    S --> R
+    D --> R
+    P --> R
+```
+
+---
+
+## 18. Operator Runbook
+
+Use this when bringing a fresh machine online.
+
+### Cold start
+
+1. Clone the repository. `npm install && npm test`.
+2. Confirm `ROBINHOOD_TESTNET.chainId === 46630` via `examples/quickstart.ts`.
+3. Start validator-node on 7701, 7702, 7703. Curl `/execute` on each.
+4. Start sealed-node on 7800. A connection refused here is a stop, not a skip.
+5. Export `VEYA_DEPLOYER_PRIVATE_KEY` for a wallet that already holds testnet ETH.
+6. Run `registerPqOnchain(1)`. Open `explorer.environment` in the Robinhood testnet explorer.
+7. Confirm the receipt `to` address is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
+8. Archive the three live baseline hashes (guest proof, sealed commitment, registration path) so you can tell a new receipt from a known-good one.
+
+### Daily checks
+
+| Check | Pass criteria |
+|-------|---------------|
+| Validators | Three `/execute` responses, threshold 2 still reachable |
+| Sealed-node | `POST /protected` not connection-refused |
+| RPC | `eth_chainId` → `0xb636` (46630) |
+| Contract | `eth_getCode` at Veya.sol is non-empty |
+| Relayer (if API used) | ETH balance covers several `storeCommitment` writes |
+
+### Incident: quorum lost
+
+Unplug is the design. Kill one validator: two honest hashes still bind. Kill two: there is no quorum. Do not lower the threshold in production to “make CI green.” Restore the node or wait.
+
+### Incident: sealed-node down
+
+Treat every in-flight protected execution as failed. Restart the process. Re-run `protectedExecute`. Only then consider `storeSealedState`. A hash from a previous day is not proof that today’s payload ran.
+
+### Incident: RPC returns the wrong chain
+
+The SDK throws before send. Fix the URL. If you wrapped `EvmAnchor` and skipped `ensureRobinhoodChain`, you have a fork, not this package: restore the guard.
+
+### Incident: duplicate commitment
+
+The contract is working. Look up `commitments[digest]`. The original `authority` and `timestamp` are the audit record. Submit a new digest if the payload changed; never “retry until it sticks” for the same 32 bytes.
+
+---
+
+## 19. Next Steps
+
+| Goal | Guide |
+|------|-------|
+| System design deep dive | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| PQ byte sizes and NIST refs | [POST_QUANTUM.md](./POST_QUANTUM.md) |
+| Off-chain audit procedures | [VERIFICATION.md](./VERIFICATION.md) |
+| Package README | [../README.md](../README.md) |
+| Contract source | [../../contracts/Veya.sol](../../contracts/Veya.sol) |
+
+---
+
+<div align="center">
+
+**@veya/sdk Quickstart**: Post-quantum agent settlement on Robinhood Chain. Protocol contract, not a token. Hosted API optional.
+
+[Architecture](./ARCHITECTURE.md) • [Post-Quantum](./POST_QUANTUM.md) • [Verification](./VERIFICATION.md)
+
+</div>
