@@ -287,3 +287,224 @@ You can also call `runConsensus(urls, taskId, payload)` as a free function witho
 
 ---
 
+## 7. Start Sealed Node
+
+```bash
+sealed-node 7800
+```
+
+Listens on `POST /protected` for encrypted execution requests.
+
+| Service | Bind | Endpoint |
+|---------|------|----------|
+| sealed-node | `127.0.0.1:7800` | `POST /protected` |
+
+Override with `VEYA_SEALED_NODE_URL`. If the node is down, `protectedExec` throws. The hosted API treats that as fail-closed (HTTP 503). Do not paint a protected badge when this step did not run.
+
+---
+
+## 8. Protected Sealed Execution
+
+Ensure the sealed node from step 7 is running, then:
+
+```ts
+import { randomBytes } from "node:crypto";
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  sealedNodeUrl: "http://127.0.0.1:7800",
+});
+
+const result = await client.protectedExecute({
+  environmentId: "env-uuid",
+  agentId: "agent-uuid",
+  eventType: "policy_eval",
+  payload: { rule: "max_spend", value: 500 },
+  sessionEntropy: randomBytes(32),
+});
+
+console.log(result.output_blake3_hash, result.verified);
+```
+
+`sessionEntropy` must be 32 bytes. The SDK hex-encodes it as `session_entropy_hex`. The node returns `SealedExecResult`:
+
+| Field | Meaning |
+|-------|---------|
+| `output_blake3_hash` | Execution digest |
+| `mldsa_signature` | Node signature over the digest |
+| `verified` | Node-side check flag |
+| `sealed.ciphertext` | Encrypted payload bytes |
+| `sealed.blake3_commitment` | Commitment over ciphertext |
+| `sealed.context_label` | Domain label |
+
+Anchor the hash with `storeSealedState` or `storeCommitment` after you have a registered environment. Live sealed-path receipt: [0xd68ab196…31d8](https://explorer.testnet.chain.robinhood.com/tx/0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8).
+
+---
+
+## 9. Configure Robinhood Chain
+
+| Field | Value |
+|-------|-------|
+| **Network** | Robinhood Chain Testnet |
+| **Chain ID** | `46630` |
+| **RPC** | `https://rpc.testnet.chain.robinhood.com` |
+| **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
+| **Veya.sol** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+| **Native currency** | ETH (18 decimals) |
+
+```ts
+import { ROBINHOOD_TESTNET, ROBINHOOD_TESTNET_CHAIN_ID, VEYA_ABI } from "@veya/sdk";
+
+ROBINHOOD_TESTNET.chainId;         // 46630
+ROBINHOOD_TESTNET.contractAddress; // Veya.sol
+VEYA_ABI;                          // compiled ABI, inlined: no extra package
+```
+
+Override only when you mean to:
+
+```ts
+new VeyaClient({
+  rpcUrl: process.env.ROBINHOOD_RPC_URL,
+  contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
+  chainId: Number(process.env.ROBINHOOD_CHAIN_ID ?? 46630),
+  validatorNodes: [
+    "http://127.0.0.1:7701",
+    "http://127.0.0.1:7702",
+    "http://127.0.0.1:7703",
+  ],
+  sealedNodeUrl: "http://127.0.0.1:7800",
+});
+```
+
+MetaMask (or any wallet you use beside the SDK) must be on chain **46630**. A write that lands on Ethereum mainnet is a misconfiguration the SDK is designed to refuse.
+
+---
+
+## 10. Register an Environment On-Chain
+
+```ts
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
+});
+
+const { publicKeyHash, environmentTx, memoTx, explorer } =
+  await client.registerPqOnchain(1); // 1 = SecureEnclave
+
+console.log(publicKeyHash);
+console.log(explorer.environment);
+console.log(explorer.memo);
+```
+
+Environment types (`Veya.sol` `EnvironmentType`):
+
+| Type | Enum | Typical use |
+|------|------|-------------|
+| Execution | `0` | General agent work |
+| SecureEnclave | `1` | Default for `registerPqOnchain`; spend-sensitive rooms |
+| Governance | `2` | Policy agents, tool ACLs |
+
+The convenience path generates a random `bytes16` UUID. For a stable room identity (the hosted API maps an app UUID onto 16 bytes), call `EvmAnchor.registerEnvironment` yourself with a chosen UUID.
+
+Live registration-path receipt: [0x9a00af5e…8ad4](https://explorer.testnet.chain.robinhood.com/tx/0x9a00af5ef80fdefb3734df19ad30b82aa57fa212bd493b7ad5b224a343808ad4).
+
+Guest content-proof receipt (hosted API using this SDK): [0x4314faef…395d](https://explorer.testnet.chain.robinhood.com/tx/0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d).
+
+---
+
+## 11. Call the Ten Solidity Functions
+
+`client.evm` is an `EvmAnchor`. Methods match ABI names in `INSTRUCTION_NAMES`.
+
+```ts
+import { randomBytes } from "node:crypto";
+import { VeyaClient, pq } from "@veya/sdk";
+
+const client = new VeyaClient({
+  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
+});
+const evm = client.evm!;
+
+const envUuid = randomBytes(16);
+const agentUuid = randomBytes(16);
+const { publicKey, privateKey } = await client.pqKeygen();
+const envHash = Uint8Array.from(Buffer.from(await pq.publicKeyHashBlake3(publicKey), "hex"));
+const agentHash = envHash; // distinct keygen in production
+
+await evm.registerEnvironment(envUuid, envHash, 1);
+await evm.registerAgent(envUuid, agentUuid, 1, agentHash);
+
+const digest = await pq.hashBlake3Bytes("payload");
+const sig = await pq.signPQ(digest, privateKey);
+await evm.attestExecution(envUuid, digest, sig);
+await evm.anchorPqAttestation(envUuid, envHash, digest);
+await evm.storeCommitment(envUuid, digest);
+
+await evm.initSpendingLimit(agentUuid, 1_000_000_000_000_000_000n, 3600);
+await evm.recordSpend(agentUuid, 1_000_000_000_000_000n);
+await evm.defineToolPolicy(envUuid, agentUuid, "veya_hash_blake3", true);
+
+const memoryId = randomBytes(16);
+await evm.flagMemoryNullifier(envUuid, memoryId);
+
+const chunk = new Uint8Array(32);
+const chunkHash = await pq.hashBlake3Bytes(chunk);
+const stateId = randomBytes(16);
+await evm.storeSealedState(envUuid, stateId, 0, chunkHash, chunk);
+```
+
+Spending amounts are **wei**, not any other chain's native unit. `initSpendingLimit` requires the environment owner. `recordSpend` may be called by a relayer. Duplicate `storeCommitment` of the same 32-byte digest reverts `CommitmentAlreadyExists`.
+
+Read back:
+
+```ts
+const env = await evm.getEnvironment(envUuid);
+console.log(env.owner, env.pqPubkeyHash, env.exists);
+```
+
+---
+
+## 12. Verify a Receipt
+
+After anchoring, verification is off-chain. The chain stores bytes; cryptographic assurance is your responsibility.
+
+```ts
+import { ethers } from "ethers";
+import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS } from "@veya/sdk";
+
+const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
+const txHash = "0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d";
+const receipt = await provider.getTransactionReceipt(txHash);
+
+if (receipt?.to?.toLowerCase() !== VEYA_CONTRACT_ADDRESS.toLowerCase()) {
+  throw new Error("receipt is not a Veya.sol write");
+}
+
+const iface = new ethers.Interface(VEYA_ABI);
+for (const log of receipt.logs) {
+  try {
+    console.log(iface.parseLog({ topics: log.topics as string[], data: log.data }));
+  } catch {
+    /* not a Veya.sol event */
+  }
+}
+```
+
+Then load the ML-DSA public key, confirm `blake3(pubkey) == pqPubkeyHash`, and `verifyPQ` over the 32-byte digest. Full procedures: [VERIFICATION.md](./VERIFICATION.md)
+
+```mermaid
+flowchart LR
+    A[Fetch receipt] --> B{to == Veya.sol?}
+    B -->|no| R[Reject]
+    B -->|yes| C[Decode event]
+    C --> D[Load ML-DSA pubkey]
+    D --> E{blake3 pk match?}
+    E -->|no| R
+    E -->|yes| F[ML-DSA verify]
+    F -->|fail| R
+    F -->|pass| G[Accept]
+```
+
+---
+
