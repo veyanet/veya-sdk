@@ -343,3 +343,210 @@ flowchart TB
 
 ---
 
+## Contract Identity
+
+| Field | Value |
+|-------|-------|
+| Solidity source | `robinhood/contracts/Veya.sol` |
+| Testnet address | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+| SDK constant | `VEYA_CONTRACT_ADDRESS` / `ROBINHOOD_TESTNET.contractAddress` |
+| Function count | 10 writes + public mapping getters + constants |
+| Record types | 9 structs behind 9 mappings |
+| Max ML-DSA signature on-chain | 4,627 bytes (`MAX_MLDSA_SIG_LEN`) |
+| Max sealed chunk | 8,192 bytes (`MAX_SEALED_CHUNK`) |
+| Max tool name | 64 bytes (`MAX_TOOL_NAME_LEN`) |
+| Native currency | ETH, 18 decimals, amounts in **wei** |
+| Token interface | None: not ERC-20, not ERC-721 |
+
+Function catalog (camelCase, matching Solidity and `INSTRUCTION_NAMES`): [programs/veya-contract.md](./programs/veya-contract.md). Storage keys: [programs/storage-layouts.md](./programs/storage-layouts.md).
+
+---
+
+## Toolchain Requirements
+
+| Tool | Minimum version | Purpose |
+|------|-----------------|---------|
+| **Node.js** | 20+ | SDK runtime (`engines.node`) |
+| **npm** | 9+ | Install, test, build |
+| **TypeScript** | 5.9 (dev) | `npm run lint` (`tsc --noEmit`) |
+| **ethers** | 6.x | JSON-RPC + `Contract` writes |
+| **vitest** | 3.x | `npm test` |
+| **tsup** | 8.x | Dual ESM/CJS build |
+| **Funded testnet ETH** | enough for gas | Required only for `EvmAnchor` writes |
+
+```bash
+npm install
+node --version    # v20+
+npm install
+npm test
+npm run build
+```
+
+Rust, Anchor, and Solana CLI are **not** required to consume this package. They are relevant only if you rebuild `Veya.sol` from `Veya Protocol` or run `veya-cli`.
+
+---
+
+## Cross-Cutting Concerns
+
+### Error handling
+
+Solidity custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, …) surface through ethers as revert data. `src/errors/veya-error.ts` maps known 4-byte selectors onto `VeyaSdkError.code`. Unknown selectors remain `ANCHOR_REVERT` with raw data attached. See [api/types-reference.md](./api/types-reference.md#veyasdkerror).
+
+### Versioning
+
+Package version is **1.0.0** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROBINHOOD_RPC_URL` | `https://rpc.testnet.chain.robinhood.com` | JSON-RPC endpoint |
+| `ROBINHOOD_CHAIN_ID` | `46630` | Expected `eth_chainId` |
+| `ROBINHOOD_EXPLORER_URL` | `https://explorer.testnet.chain.robinhood.com` | Explorer origin |
+| `VEYA_CONTRACT_ADDRESS` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Protocol contract |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | unset | Payer hex key for writes (never commit) |
+| `VEYA_VALIDATOR_NODES` | `http://127.0.0.1:7701,7702,7703` | Comma-separated origins |
+| `VEYA_SEALED_NODE_URL` | `http://127.0.0.1:7800` | Sealed execution origin |
+
+Resolution order is constructor argument, then env, then `ROBINHOOD_TESTNET`. Full table: [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration) and `resolveConfig` in [api/types-reference.md](./api/types-reference.md#veyaclientconfig).
+
+### Contributing to docs
+
+When Solidity behavior changes, update `veya-contract.md` and `storage-layouts.md` in the same change as `src/abi/Veya.json`. When SDK types change, update `api/types-reference.md`. Use PQ-first language; do not introduce SHA-256 on new commitment paths.
+
+---
+
+## Scripts and Operator Utilities
+
+This package is a TypeScript SDK, not a Rust CLI. Operators drive it from Node:
+
+| Entry | Purpose |
+|-------|---------|
+| `examples/quickstart.ts` | Local BLAKE3 hash; prints default testnet targets |
+| `scripts/doctor.ts` | Checks RPC, chain id, contract address, env completeness |
+| `scripts/live-rpc.ts` | Live `eth_chainId` / `eth_getCode` / optional read of `environments` |
+| `npm test` | Vitest: PQ round-trip, chain constants, camelCase ABI names |
+| `npm run build` | tsup ESM + CJS + dts |
+| `npm run lint` | `tsc --noEmit` |
+
+```bash
+npm install
+npx tsx examples/quickstart.ts
+npx tsx scripts/doctor.ts
+npx tsx scripts/live-rpc.ts
+```
+
+Deep dive: [CLI.md](./CLI.md).
+
+The optional binary `veya` (`veya-cli`) is **not** shipped here. If you need SQLite-backed `veya env create` / `veya consensus run` from a Rust binary, use `cli`. Consensus and sealed HTTP contracts are the same (`POST /execute`, `POST /protected`), so Node `runConsensus` / `protectedExec` are interchangeable with that CLI for fleet smoke checks.
+
+---
+
+## Testing and Verification Entry Points
+
+| Suite | Command | Scope |
+|-------|---------|-------|
+| SDK unit | `npm test` | BLAKE3 determinism, ML-DSA sign/verify, chain id 46630, ABI camelCase |
+| Typecheck | `npm run lint` | Public types vs implementation |
+| Operator doctor | `npx tsx scripts/doctor.ts` | Env + RPC + contract code present |
+| Live RPC | `npx tsx scripts/live-rpc.ts` | Real `eth_chainId` against testnet |
+| Quickstart | `npx tsx examples/quickstart.ts` | Hash + print resolved config |
+
+Live writes (`registerEnvironment`, `storeCommitment`, …) require `VEYA_DEPLOYER_PRIVATE_KEY` and a funded testnet wallet. They are not part of `npm test`. The hosted API may run a separate live ship check; this package’s unit tests stay offline so CI does not spend ETH.
+
+Verify a mined transaction:
+
+```bash
+# Explorer
+# https://explorer.testnet.chain.robinhood.com/tx/<0xhash>
+
+# JSON-RPC
+curl -s https://rpc.testnet.chain.robinhood.com \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x..."]}'
+```
+
+---
+
+## Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Veya.sol** | Protocol contract on Robinhood Chain. Not an ERC-20. |
+| **EvmAnchor** | ethers v6 client that encodes the ten write functions and waits for receipts |
+| **VeyaClient** | Facade: PQ + consensus + sealed + optional `EvmAnchor` |
+| **resolveConfig** | Merges constructor args, env vars, and `ROBINHOOD_TESTNET` |
+| **Attestation** | BLAKE3 execution commitment with optional ML-DSA sig bytes in mapping storage |
+| **Nullifier** | On-chain flag that a memory slot was consumed (spend-once) |
+| **Quorum** | Minimum agreeing validators (default 2 of 3) |
+| **Sealed execution** | AES-256-GCM protected workload at the sealed node, with BLAKE3 output commitments |
+| **Wei** | 1e-18 ETH on Robinhood Chain; unit for `initSpendingLimit` / `recordSpend` |
+| **bytes16 uuid** | 128-bit environment / agent / memory identifier passed as `bytes16` |
+| **Mapping key** | `keccak256` of packed fields (or the uuid / hash itself): see storage-layouts |
+| **InstructionName** | CamelCase Solidity function name in `INSTRUCTION_NAMES` |
+| **Harvest-now-decrypt-later** | Adversary records classical signatures today to forge after a quantum break |
+
+---
+
+## FAQ
+
+### Why is ML-DSA verification off-chain?
+
+Robinhood Chain is EVM. Dilithium verification inside a Solidity contract is impractical at production gas and throughput. The contract stores immutable hash and signature bytes; auditors verify with `pq.verifyPQ` at native speed.
+
+### Do I need a VEYA API server?
+
+**No** for hashing, consensus against self-hosted validators, sealed-node calls, and direct `EvmAnchor` writes. The hosted `https://api.veyanet.tech` is an optional product surface that itself imports this SDK.
+
+### Which hash function should I use?
+
+**BLAKE3-256** for all new commitments. Do not introduce SHA-256 on new commitment paths in this package.
+
+### How many validator nodes do I need?
+
+Minimum **three** with a **2-of-3** quorum threshold for Byzantine tolerance of one faulty node. Defaults bind `127.0.0.1:7701–7703`.
+
+### Where are secret keys stored?
+
+Off-chain only. `VEYA_DEPLOYER_PRIVATE_KEY` is an secp256k1 hex key for gas payment. ML-DSA secret keys stay in process memory or an operator vault. On-chain records store BLAKE3 pubkey hashes only.
+
+### Is Veya.sol a token?
+
+**No.** There is no `transfer`, no `balanceOf`, no decimals on a VEYA token. Native ETH pays gas. Spending limits count **wei** of native currency recorded by agents, not token balances.
+
+### How is this different from the Solana VEYA program?
+
+The Solana tree (`anchor/`) uses PDAs and (historically) memo companions. This package talks to **mappings** on **Veya.sol** at a 20-byte address on chain id **46630**. Function names are camelCase (`registerEnvironment`), not snake_case. Amounts are wei.
+
+### Where do I report security issues?
+
+Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` memory dumps. Disclose privately to the maintainers. Do not open a public issue that includes key material.
+
+### Can I point this SDK at Ethereum mainnet or another L2?
+
+`EvmAnchor` will send only if `eth_chainId` matches `config.chainId` (default 46630). Pointing at another EVM by accident is the failure mode the guard exists to prevent. A deliberate override of `chainId` + `rpcUrl` + `contractAddress` is possible but is not the supported product path.
+
+---
+
+## Support and Security
+
+| Resource | Link |
+|----------|------|
+| Package intro | [../README.md](../README.md) |
+| Operator surface | [CLI.md](./CLI.md) |
+| Deployment | [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| Contract functions | [programs/veya-contract.md](./programs/veya-contract.md) |
+| Storage | [programs/storage-layouts.md](./programs/storage-layouts.md) |
+| Types | [api/types-reference.md](./api/types-reference.md) |
+| Testnet explorer | [Veya.sol](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84) |
+| License | MIT |
+
+---
+
+<div align="center">
+
+**@veya/sdk documentation v1.0.0**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
+
+[Deployment](./DEPLOYMENT.md) • [Types](./api/types-reference.md) • [Veya.sol](./programs/veya-contract.md) • [Operator surface](./CLI.md)
+
+</div>
