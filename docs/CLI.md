@@ -400,3 +400,291 @@ npx tsx path/to/operator-script.ts
 
 ---
 
+## Consensus from Node
+
+```typescript
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  validatorNodes: [
+    "http://127.0.0.1:7701",
+    "http://127.0.0.1:7702",
+    "http://127.0.0.1:7703",
+  ],
+});
+
+const result = await client.runConsensus("rebalance-42", {
+  pool: "ETH-USD",
+  bps: 50,
+});
+
+if (!result.consensus_reached) {
+  process.exit(1);
+}
+console.log(result.agreed_blake3_hash);
+```
+
+### Prerequisites
+
+Start three validator processes on 7701–7703 (VEYA node runtime, not this npm package). Health:
+
+```bash
+curl -s -X POST http://127.0.0.1:7701/execute \
+  -H "Content-Type: application/json" \
+  -d '{"task_id":"health","payload":{}}'
+```
+
+### `ConsensusResult` fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | string | Echo of the task id |
+| `consensus_reached` | boolean | ≥2 matching success hashes |
+| `agreed_blake3_hash` | string \| null | Hex digest when quorum met |
+| `node_results` | array | Per-node `NodeResult` |
+| `threshold` | number | `2` |
+
+Equivalent Rust CLI (external package): `veya consensus run --task-id ... --payload ...` in `cli`. Same HTTP body `{ task_id, payload }`.
+
+---
+
+## Sealed execution from Node
+
+```typescript
+import { randomBytes } from "node:crypto";
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  sealedNodeUrl: "http://127.0.0.1:7800",
+});
+
+const sealed = await client.protectedExecute({
+  environmentId: envId,
+  agentId: agentId,
+  eventType: "audit",
+  payload: { step: "operator" },
+  sessionEntropy: randomBytes(32),
+});
+```
+
+Wire body uses snake_case. HTTP errors throw `sealed-node error: <status>`.
+
+Optional persist:
+
+```typescript
+await client.evm!.storeSealedState(
+  envUuidBytes,
+  stateIdBytes,
+  0,
+  hash32,
+  ciphertextChunk,
+);
+```
+
+Requires a payer key and `ciphertextChunk.length ≤ 8192`.
+
+---
+
+## On-chain writes from Node
+
+All writes: `EvmAnchor` methods matching `InstructionName` camelCase. See [veya-contract.md](./programs/veya-contract.md).
+
+```typescript
+import { EvmAnchor, pq } from "@veya/sdk";
+import { randomBytes } from "node:crypto";
+
+const evm = new EvmAnchor({
+  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
+});
+
+const envUuid = randomBytes(16);
+const { publicKey } = await pq.generatePQIdentity();
+const hashHex = await pq.publicKeyHashBlake3(publicKey);
+const hashBytes = Uint8Array.from(Buffer.from(hashHex, "hex"));
+
+const tx1 = await evm.registerEnvironment(envUuid, hashBytes, 0);
+const tx2 = await evm.storeCommitment(envUuid, hashBytes);
+console.log(evm.explorerFor(tx1));
+console.log(evm.explorerFor(tx2));
+```
+
+If `eth_chainId` is not 46630 (or your configured id), the first write throws before send.
+
+Spending uses **wei**:
+
+```typescript
+await evm.initSpendingLimit(agentUuid, 1_000_000_000_000_000_000n, 86400);
+await evm.recordSpend(agentUuid, 1_000_000_000_000_000n);
+```
+
+---
+
+## JSON shapes
+
+### Quickstart / doctor style object
+
+| Field | Description |
+|-------|-------------|
+| `chainId` | Number 46630 |
+| `rpc` | HTTPS URL |
+| `contract` | Veya.sol address |
+| `blake3` | 64 hex chars when hashing |
+
+### ConsensusResult
+
+See [types-reference.md](./api/types-reference.md#consensusresult). Pipe with `jq` if you wrap the client in a shell that prints JSON:
+
+```bash
+npx tsx scripts/run-consensus.ts | jq -r .agreed_blake3_hash
+```
+
+### MemoryEntry (local)
+
+| Field | Description |
+|-------|-------------|
+| `id` | UUID |
+| `environmentId` | string |
+| `agentId` | string |
+| `data` | payload string |
+| `blake3ContentHash` | hex |
+| `nullified` | boolean |
+
+---
+
+## Exit Codes
+
+| Code | Meaning | Typical causes |
+|------|---------|----------------|
+| **0** | Success | tests passed; doctor ok; script finished |
+| **1** | General error | RPC down, chain mismatch, empty bytecode, quorum false, sealed HTTP error, ethers revert |
+| **2** | Usage / env | Missing Node 20, vitest not installed |
+
+Vitest uses its own non-zero codes on assertion failure. Treat any non-zero as a broken operator workstation.
+
+```bash
+npm test || exit 1
+npx tsx scripts/doctor.ts || exit 1
+npx tsx scripts/live-rpc.ts || exit 1
+```
+
+---
+
+## Environment Variables
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `ROBINHOOD_RPC_URL` | `resolveConfig` | JSON-RPC |
+| `ROBINHOOD_CHAIN_ID` | `resolveConfig` | Expected chain id |
+| `ROBINHOOD_EXPLORER_URL` | `resolveConfig` | Explorer origin |
+| `VEYA_CONTRACT_ADDRESS` | `resolveConfig` | Protocol address |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | `VeyaClient` / `EvmAnchor` | Payer hex key |
+| `VEYA_VALIDATOR_NODES` | `resolveConfig` | Comma-separated origins |
+| `VEYA_SEALED_NODE_URL` | `resolveConfig` | Sealed origin |
+
+The SDK does not read `SOLANA_*` variables. Setting them has no effect.
+
+Copy values from [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration). Never commit the payer key.
+
+---
+
+## Shell Integration
+
+### Bash | hash then doctor
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+npm install
+npm test
+npx tsx scripts/doctor.ts
+npx tsx examples/quickstart.ts
+```
+
+### Bash | consensus after fleet up
+
+```bash
+export VEYA_VALIDATOR_NODES=http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703
+npx tsx -e "
+import { VeyaClient } from './src/index.ts';
+const c = new VeyaClient();
+const r = await c.runConsensus('health', { ping: true });
+if (!r.consensus_reached) process.exit(1);
+console.log(JSON.stringify(r));
+"
+```
+
+### PowerShell
+
+```powershell
+cd D:\Script\AirdropsVault\Scripts\projects\veya-privacy\robinhood\sdk
+npm test
+npx tsx examples/quickstart.ts
+$env:ROBINHOOD_CHAIN_ID = "46630"
+npx tsx scripts/live-rpc.ts
+```
+
+Do not echo `$env:VEYA_DEPLOYER_PRIVATE_KEY`.
+
+---
+
+## Relationship to veya-cli
+
+| Task | This package (`@veya/sdk`) | `cli` |
+|------|----------------------------|-------------------------------------|
+| Install | `npm install` in `@veya/sdk` | `cargo install --path clients/cli` |
+| Binary | none (`tsx` / `node`) | `veya` |
+| Local env rows | JSON memory + chain mappings | SQLite `~/.veya/veya.db` |
+| Consensus | `runConsensus` | `veya consensus run` |
+| Sealed | `protectedExec` | `veya sealed exec` |
+| Robinhood writes | `EvmAnchor` | not the primary path in that CLI |
+
+If a runbook says “run `veya init`”, that instruction applies to the **Rust** CLI, not this SDK. Here you run `npm test` and `npx tsx examples/quickstart.ts`.
+
+Validators and sealed-node binaries are still the VEYA node runtimes; only the **client** differs.
+
+---
+
+## Troubleshooting
+
+| Symptom | Diagnosis | Fix |
+|---------|-----------|-----|
+| `VEYA SDK expected chain id 46630` | RPC is not Robinhood testnet | Set `ROBINHOOD_RPC_URL` to the official endpoint |
+| `payerPrivateKey required` | `client.evm` undefined | Export `VEYA_DEPLOYER_PRIVATE_KEY` |
+| `transaction mined without a hash` | Receipt anomaly | Retry; check explorer by from-address |
+| `Connection refused` on consensus | Validators down | Start 7701–7703 |
+| `consensus_reached: false` | Hash drift | Identical payloads; inspect `node_results` |
+| `sealed-node error: 500` | Node panic / bad entropy | Check sealed logs; 32-byte `sessionEntropy` |
+| `SpendingLimitExceeded` | Wei cap | Lower amount or wait for period rollover |
+| `CommitmentAlreadyExists` | Same 32-byte digest | Use a new commitment |
+| vitest ABI failure | `Veya.json` stale | Recompile Solidity and refresh ABI |
+| `hash-wasm` / WASM load | Node too old | Upgrade to Node 20+ |
+| Empty `eth_getCode` | Wrong address | Confirm `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+
+---
+
+## Security Notes
+
+| Topic | Guidance |
+|-------|----------|
+| **Payer key** | secp256k1 gas key only; never log; never commit |
+| **ML-DSA secrets** | `pqKeygen` material stays in process; not printed by quickstart |
+| **Memory JSON** | `chmod 700 ~/.veya` on POSIX; contains agent data + hashes |
+| **Consensus transport** | Default HTTP to localhost: TLS + auth in production |
+| **Sealed transport** | Same; mTLS at the proxy |
+| **Doctor / live-rpc** | Must not dump env dumps that include keys |
+| **Veya.sol** | Protocol storage is public; do not put secrets in `storeCommitment` payloads |
+
+PQ verification of anchored attestations is **off-chain**: `pq.verifyPQ` after reading `attestations` via the ABI getter.
+
+---
+
+## See Also
+
+| Guide | Description |
+|-------|-------------|
+| [README.md](./README.md) | Documentation hub |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Testnet consume, fleet, gas |
+| [api/types-reference.md](./api/types-reference.md) | `VeyaClient`, `EvmAnchor`, `ConsensusResult` |
+| [programs/veya-contract.md](./programs/veya-contract.md) | Solidity functions |
+| [../README.md](../README.md) | Package intro |
+| `cli` | Optional Rust `veya-cli` |
