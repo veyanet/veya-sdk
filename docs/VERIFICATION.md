@@ -305,3 +305,139 @@ Guest proofs in the hosted product may use SHA-256 for **browser-previewable** c
 
 ---
 
+## Execution Attestation Verification
+
+### Inputs
+
+- `Attestation` at `attestations[keccak256(abi.encodePacked(authority, blake3Hash))]`
+- Agent ML-DSA public key
+- Optional: canonical execution payload (recompute BLAKE3)
+
+### Steps
+
+1. Fetch receipt; assert Veya.sol `to`
+2. Parse `ExecutionAttested(authority, environmentUuid, blake3Hash)`
+3. `eth_call` the mapping with the same key the contract uses
+4. Extract `blake3Hash` (32 bytes) and `mldsaSig`
+5. Optionally: `BLAKE3(canonical_payload) == blake3Hash`
+6. `verifyPQ(sig, blake3HashBytes, pubkey)`
+
+**Critical:** Sign and verify over the **32-byte BLAKE3 digest**, not the hex-encoded string.
+
+### TypeScript
+
+```typescript
+import { verifyPQ, hashBlake3Bytes } from "@veya/sdk/pq";
+
+const ok = await verifyPQ(signatureBytes, hashBytes, publicKey);
+if (!ok) throw new Error("ML-DSA verification failed");
+
+const recomputed = await hashBlake3Bytes(canonicalPayload);
+if (Buffer.compare(recomputed, hashBytes) !== 0) {
+  throw new Error("payload does not match anchored digest");
+}
+```
+
+If `mldsaSig` is empty, the write is a timestamped hash from `msg.sender`, not a PQ attestation. Treat it as a commitment, then look for `anchorPqAttestation` or validator `NodeResult` signatures off-chain.
+
+---
+
+## Consensus Cross-Check
+
+When execution flows through validator nodes:
+
+```mermaid
+flowchart LR
+    P["Canonical payload"] --> N1["Node alpha 7701"]
+    P --> N2["Node beta 7702"]
+    P --> N3["Node gamma 7703"]
+    N1 --> Q{"2/3 hash match?"}
+    N2 --> Q
+    N3 --> Q
+    Q -->|yes| H["agreed_blake3_hash"]
+    H --> C{"== on-chain hash?"}
+    C -->|yes| OK["Verified"]
+    C -->|no| BAD["Reject: anchor drift"]
+```
+
+**Invariant:**
+
+```
+quorum_hash == local_hash == on_chain_blake3
+```
+
+`runConsensus` in this SDK POSTs `/execute` to each URL and counts matching `blake3_execution_hash` values among `status === "success"` results. Threshold is 2. HTTP failures do not count as votes.
+
+Verify each `NodeResult.mldsa_signature` with `verifyPQ` over the same digest the node hashed. A node that returns a hash but a broken signature is excluded, not averaged.
+
+---
+
+## PQ Attestation Record Verification
+
+`anchorPqAttestation` creates a `PqAttestation` keyed by `executionHash`.
+
+| Field | Must equal |
+|-------|------------|
+| `identityHash` | `BLAKE3(agent_ml_dsa_pubkey)` |
+| `executionHash` | `Attestation.blake3Hash` or the consensus agreed hash |
+| `environmentUuid` | Same environment on both records |
+| `authority` | Expected signer / relayer |
+
+This record exists so a relayer can store a compact binding without repeating 2,420 signature bytes in every receipt. It is not a substitute for `verifyPQ` when signature bytes exist elsewhere (validator logs, `attestExecution`).
+
+Duplicate `executionHash` reverts `PqAttestationAlreadyExists`. A second “updated” attestation for the same digest will not land; that is a feature.
+
+---
+
+## Sealed State Verification
+
+For each `SealedState` chunk:
+
+1. Download `ciphertext` from `sealedStates[keccak256(env, stateId, chunkIndex)]`
+2. Recompute `BLAKE3(ciphertext)` off-chain
+3. Compare to `blake3CiphertextHash` (caller-declared at store time: **not** computed in the EVM)
+4. Reassemble chunks by `stateId` + ascending `chunkIndex`
+5. Decrypt off-chain with session keys from the sealed-node exchange (AES-256-GCM)
+6. Confirm `output_blake3_hash` from `protectedExec` matches any `storeCommitment` companion
+
+Because the contract does not re-hash, a malicious caller can store `(chunk A, hash-of-B)`. Detection is the auditor’s recompute. Production operators should store chunks only from `protectedExec` output they themselves received.
+
+Live sealed-path companion: [0xd68ab196…31d8](https://explorer.testnet.chain.robinhood.com/tx/0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8). Ciphertext may stay off-chain; the chain sees the hash.
+
+Max chunk: 8,192 bytes (`MAX_SEALED_CHUNK`). Larger payloads split. `totalChunks` on the struct is a hint, not a Merkle root: walk indices until `exists` is false, then confirm count.
+
+---
+
+## Memory Integrity Verification
+
+### Off-chain (SDK)
+
+`readMemory` re-hashes `data` and compares to `blake3ContentHash`. Integrity failure throws. Nullified entries throw. Missing keys throw. The file is `~/.veya/agent-memory.json`.
+
+### On-chain
+
+| Step | Check |
+|------|-------|
+| Before consume | `nullifiers[memoryId].nullified` is false / not exists |
+| After consume | Nullifier exists with `nullified == true` and matching `environmentUuid` |
+
+A local invalidate without `flagMemoryNullifier` is not visible to other machines. Production should anchor after local invalidation.
+
+---
+
+## Spending and Policy Verification
+
+Amounts are **wei** of native ETH on Robinhood Chain.
+
+| Account | Auditor action |
+|---------|----------------|
+| `spendingLimits[agentUuid]` | `spentAmount <= maxAmount` within `periodSecs`; note rollover at `periodStart + periodSecs` |
+| `toolPolicies[keccak256(agentUuid, toolName)]` | `allowed == true` for the invoked tool; deny-by-default off-chain |
+| `agents[agentUuid]` | `isActive`; `pqHash` matches off-chain pubkey; `environmentUuid` matches room |
+
+SDK `checkSpendAllowed` is preflight. The hosted API may return HTTP 402 before a write. On-chain `recordSpend` is the settlement record. An API that says “under cap” while the mapping says `SpendingLimitExceeded` on replay is an API bug.
+
+`PolicyAgent.evaluateToolCall` combines tool ACL and optional `maxWeiPerAction`. Governance environments should require `requireConsensus` so a tool allow list cannot skip quorum.
+
+---
+
