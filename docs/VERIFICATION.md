@@ -441,3 +441,249 @@ SDK `checkSpendAllowed` is preflight. The hosted API may return HTTP 402 before 
 
 ---
 
+## Automated Verification Pipeline
+
+Recommended CI / audit automation:
+
+```mermaid
+flowchart TD
+    S1["1. getTransactionReceipt"] --> S2["2. Assert to Veya.sol"]
+    S2 --> S3["3. Decode event + eth_call mapping"]
+    S3 --> S4["4. Load pubkey from vault"]
+    S4 --> S5["5. npm test + verifyPQ"]
+    S5 --> S6{"Pass?"}
+    S6 -->|yes| S7["7. Append chained audit log"]
+    S6 -->|no| S8["exit 1 + alert"]
+```
+
+### Commands
+
+```bash
+npm install && npm test
+npm install && npm run lint
+
+# Funded live path lives in the API tree, not in unit tests
+# https://api.veyanet.tech/scripts/live-ship-check.ts
+```
+
+Schedule periodic re-verification of all attestations in the retention window. Re-verification needs archived pubkeys; the chain does not store them.
+
+Do not call a second RPC “because the first one failed verify.” If verify fails, the attestation fails. RPC failover is for liveness of `eth_getTransactionReceipt`, not for shopping a chain that will agree with you.
+
+---
+
+## TypeScript Verifier Examples
+
+### Full attestation verify
+
+```typescript
+import { verifyPQ, publicKeyHashBlake3 } from "@veya/sdk/pq";
+
+async function verifyAttestation(opts: {
+  signature: Uint8Array;
+  hash: Uint8Array;
+  publicKey: Uint8Array;
+  onChainAgentHashHex: string;
+}) {
+  const pkHash = await publicKeyHashBlake3(opts.publicKey);
+  if (pkHash !== opts.onChainAgentHashHex.replace(/^0x/, "")) {
+    throw new Error("agent identity mismatch");
+  }
+  const valid = await verifyPQ(opts.signature, opts.hash, opts.publicKey);
+  if (!valid) throw new Error("ML-DSA verification failed");
+  return true;
+}
+```
+
+### Consensus plus chain
+
+```typescript
+import { runConsensus, pq } from "@veya/sdk";
+
+const consensus = await runConsensus(
+  ["http://127.0.0.1:7701", "http://127.0.0.1:7702", "http://127.0.0.1:7703"],
+  "task-001",
+  payload,
+);
+if (!consensus.consensus_reached || !consensus.agreed_blake3_hash) {
+  throw new Error("no quorum");
+}
+const local = await pq.hashBlake3(stableCanonicalBytes);
+if (local !== consensus.agreed_blake3_hash) {
+  throw new Error("local hash diverges from quorum");
+}
+```
+
+Wire `local` to the on-chain `bytes32` (with or without `0x`) after the receipt check.
+
+---
+
+## ethers v6 Fetch Patterns
+
+```typescript
+import { ethers } from "ethers";
+import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS, explorerTxUrl } from "@veya/sdk";
+
+const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
+const contract = new ethers.Contract(VEYA_CONTRACT_ADDRESS, VEYA_ABI, provider);
+const iface = new ethers.Interface(VEYA_ABI);
+
+export async function inspectTx(txHash: string) {
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt) throw new Error("unknown tx");
+  const events = [];
+  for (const log of receipt.logs) {
+    try {
+      events.push(iface.parseLog({ topics: [...log.topics], data: log.data }));
+    } catch {
+      /* ignore non-Veya logs */
+    }
+  }
+  return {
+    explorer: explorerTxUrl(txHash),
+    to: receipt.to,
+    status: receipt.status,
+    blockNumber: receipt.blockNumber,
+    events: events.map((e) => ({ name: e?.name, args: e?.args })),
+  };
+}
+
+export async function readCommitment(digest32: string) {
+  return contract.commitments(digest32);
+}
+```
+
+Use `eth_call` against getters (`environments`, `agents`, `attestations`, `pqAttestations`, `commitments`, `spendingLimits`, `sealedStates`). Mapping keys for attestations and policies are keccak of packed fields: compute them the same way Solidity does (`solidityPackedKeccak256`).
+
+```typescript
+const attestKey = ethers.solidityPackedKeccak256(
+  ["address", "bytes32"],
+  [authority, blake3Hash],
+);
+const row = await contract.attestations(attestKey);
+```
+
+---
+
+## Audit Trail Requirements
+
+| Artifact | Retention |
+|----------|-----------|
+| Robinhood Chain transaction hashes | Permanent |
+| Full mapping snapshots (`eth_call` JSON) | ≥ 7 years for regulated treasuries |
+| ML-DSA public keys per agent version | Until rotation + grace period |
+| Consensus `NodeResult` JSON | Match attestation retention |
+| Verifier tool versions (`@veya/sdk`, `@noble/post-quantum`, `hash-wasm`) | Per audit cycle |
+| RPC `eth_chainId` observation | Per audit cycle |
+
+Chain records alone are **insufficient** without off-chain pubkeys. A perfect `bytes32` with a lost public key is an opaque pebble.
+
+---
+
+## Common Failure Modes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Verify fails, hash matches | Signed hex string instead of 32-byte digest | Use raw `blake3Hash` bytes |
+| Identity mismatch | Wrong pubkey for agent | Reload from vault |
+| `SignatureTooLarge` on-chain | Wrong algorithm or padded garbage | ML-DSA-44 only |
+| Quorum mismatch | Non-canonical JSON serialization | Stable key order |
+| Receipt looks fine, `to` wrong | ETH transfer or other contract | Require Veya.sol address |
+| Stale spend window | Period not rolled in the mapping yet | Re-read after `recordSpend` |
+| Sealed hash mismatch | Declared hash != chunk | Recompute; reject |
+| Wrong chain | RPC not 46630 | Switch endpoint |
+| Duplicate commitment revert | Same digest already stored | That is success from an earlier write: fetch it |
+| Empty `mldsaSig` | Relayer used `storeCommitment` | Verify as commitment + optional PqAttestation |
+
+```mermaid
+flowchart TD
+    E["Verification failed"] --> T{"Class?"}
+    T -->|Receipt| R["Check to and chain id"]
+    T -->|Identity| I["BLAKE3 pubkey vs mapping"]
+    T -->|Sig| S["32-byte message?"]
+    T -->|Quorum| Q["Diff node hashes"]
+    T -->|Sealed| C["Recompute chunk hash"]
+    R --> V["Verdict"]
+    I --> V
+    S --> V
+    Q --> V
+    C --> V
+```
+
+---
+
+## Operator Runbook
+
+### First-time auditor setup
+
+1. Install Node 20+. `npm install && npm test`.
+2. Confirm `ROBINHOOD_TESTNET_CHAIN_ID === 46630` and `VEYA_CONTRACT_ADDRESS` matches this document.
+3. Fetch `0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d` and assert `to`.
+4. Place agent public keys in a vault the CI runner can read. Do not fetch them from a public JSON bucket without authentication.
+5. Script `inspectTx` + identity + optional `verifyPQ`. Fail the job on throw.
+
+### When the hosted API disagrees with the chain
+
+Trust the chain mapping and the receipt. The API row is a cache. If `_pq.agreed_blake3_hash` does not equal the event’s `bytes32`, the API is wrong. Do not “fix” the verifier to match the API.
+
+### When validators disagree
+
+Do not pick the hash that matches the API. Dump all three `blake3_execution_hash` values. If no pair matches, there is no quorum. Restart nodes only after you have archived the divergent payloads.
+
+### When keys rotate
+
+Archive the old public key against the old `pqHash`. New `registerAgent` (new UUID) is cleaner than overwriting folklore. The v1 contract does not provide an in-place pubkey update; `exists` stays true.
+
+### When the relayer is the authority field
+
+That means the hosted wallet paid gas. Agent identity is still the ML-DSA fingerprint. Write both into the audit log: `receipt.from` (payer) and `pqHash` (agent).
+
+---
+
+## Invariants
+
+1. A VEYA proof’s `receipt.to` is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
+2. Chain ID of the RPC used to fetch that receipt is `46630` unless the operator documented a different deployed network.
+3. `pqPubkeyHash` is BLAKE3(ML-DSA-44 public key bytes).
+4. ML-DSA messages for attestations are 32 raw bytes.
+5. Empty signature + `storeCommitment` is a hash anchor, not a lattice proof.
+6. Quorum is two matching hashes from live nodes, not two matching API fields.
+7. Sealed chunk hashes are recomputed by the auditor.
+8. Spend units are wei.
+9. No token address is part of verification.
+10. The hosted API is optional; verification must work with RPC + SDK only.
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Receipt identity** | Checks on `to`, `status`, and chain id before crypto |
+| **Fingerprint** | BLAKE3 of an ML-DSA public key |
+| **Digest** | 32-byte BLAKE3 of a payload |
+| **Quorum hash** | Agreed `blake3_execution_hash` from 2-of-3 nodes |
+| **Relayer** | Optional API wallet that sets `msg.sender` |
+| **Veya.sol** | Protocol contract: not a token |
+
+---
+
+## See Also
+
+| Guide | Description |
+|-------|-------------|
+| [POST_QUANTUM.md](./POST_QUANTUM.md) | ML-DSA, Kyber, BLAKE3 deep dive |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Trust boundaries and mappings |
+| [QUICKSTART.md](./QUICKSTART.md) | Operator tutorial |
+| [../../contracts/Veya.sol](../../contracts/Veya.sol) | Function and error definitions |
+| [../README.md](../README.md) | Package install and defaults |
+
+---
+
+<div align="center">
+
+**@veya/sdk Verification**: Off-chain ML-DSA. On-chain hashes. Robinhood Chain ID 46630. Hosted API optional.
+
+[Architecture](./ARCHITECTURE.md) • [Post-Quantum](./POST_QUANTUM.md) • [Quickstart](./QUICKSTART.md)
+
+</div>
