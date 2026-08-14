@@ -321,3 +321,183 @@ Windows operators should use a service wrapper that restarts on failure and does
 
 ---
 
+## Networking and Security
+
+| Control | Guidance |
+|---------|----------|
+| Bind | Private NIC or loopback |
+| TLS | Reverse proxy (nginx/caddy) if leaving localhost |
+| Auth | Mutual TLS or network policy; the binary may not authenticate callers |
+| Payload confidentiality | `/execute` sees plaintext JSON; treat the path as sensitive |
+| Logs | Redact payloads that contain wei amounts and destinations |
+
+The fleet can be reached by anyone who can POST if the port is open. That allows hash grinding and load. It does not by itself let them write `Veya.sol`; settlement still needs `payerPrivateKey` and `ensureRobinhoodChain`.
+
+Separate the validator VLAN from the RPC keys. A compromised node should not have access to `VEYA_DEPLOYER_PRIVATE_KEY`.
+
+---
+
+## Rolling Upgrades
+
+Upgrade one node at a time:
+
+1. Confirm the other two still agree on a canary payload.
+2. Stop the target node.
+3. Deploy the new binary and identity file (same identity unless rotating).
+4. Start the node; check ping hash.
+5. If the new binary hashes differently, stop the rollout and revert. Two old nodes still form quorum; a mixed hash split will fail quorum.
+
+Canonicalization changes are hard breaks. Version the JSON encoding explicitly if the payload schema changes.
+
+The SDK sequential fetch means upgrading the first URL in `VEYA_VALIDATOR_NODES` first will delay or fail client calls if the new node errors. Put the most stable node first in the list during rollout, or wrap fetches.
+
+---
+
+## SDK Integration
+
+```typescript
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  validatorNodes: [
+    "http://127.0.0.1:7701",
+    "http://127.0.0.1:7702",
+    "http://127.0.0.1:7703",
+  ],
+});
+
+const result = await client.runConsensus("ops-canary", { action: "ping" });
+```
+
+`resolveConfig` reads `VEYA_VALIDATOR_NODES` as comma-separated origins. Spaces after commas are trimmed at fetch time.
+
+The client does not verify ML-DSA inside `runConsensus`. Operators must verify in glue or in an audit job.
+
+---
+
+## Settlement on Robinhood Chain
+
+After `consensus_reached`:
+
+```typescript
+await client.evm!.anchorPqAttestation(
+  environmentUuid,
+  identityHash,
+  Uint8Array.from(Buffer.from(result.agreed_blake3_hash!, "hex")),
+);
+```
+
+That write:
+
+- Calls `ensureRobinhoodChain()` (`eth_chainId` vs configured id, default 46630).
+- Uses inlined `VEYA_ABI` against `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on testnet.
+- Reverts `PqAttestationAlreadyExists` if the execution hash was already stored.
+
+Alternatively `attestExecution` stores ML-DSA bytes (max 4627). Pick one or both depending on whether auditors need signatures on chain or only hashes.
+
+Explorer: `https://explorer.testnet.chain.robinhood.com/tx/<hash>`.
+
+Spending remains wei. Consensus does not move ETH.
+
+---
+
+## Failure Modes
+
+| Failure | Detection | Recovery |
+|---------|-----------|----------|
+| Port in use | Bind error at start | Choose another port; update SDK URLs |
+| Hash split after upgrade | `consensus_reached: false` | Rollback binary; align canonicalization |
+| Sequential fetch throw | One node down | Health proxy or try/catch wrapper |
+| Identity lost on reboot | Verify fails | Persist ML-DSA keys |
+| Disk full | Process crash | Monitor; identities on dedicated volume |
+| Clock skew | If payload includes time | Do not hash wall-clock unless all nodes share it |
+| Payload bigint | JSON fail | wei strings |
+| Anchoring chain mismatch | `ensureRobinhoodChain` throw | Fix `ROBINHOOD_RPC_URL` |
+| Duplicate execution hash | Solidity revert | New payload / new task bytes |
+
+A split-brain where two nodes collude on a hash is a 2-of-3 attack. Mitigate with independent operators or diverse implementations, not with a fourth node that still uses threshold 2 unless you also change the client.
+
+---
+
+## Environment Variables
+
+| Variable | Who reads it | Purpose |
+|----------|--------------|---------|
+| `VEYA_VALIDATOR_NODES` | `@veya/sdk` `resolveConfig` | Client URL list |
+| `ROBINHOOD_RPC_URL` | SDK anchoring only | JSON-RPC for `Veya.sol` |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | SDK anchoring only | Must not live on validator hosts |
+| `RUST_LOG` | Node process | Log level |
+
+Nodes should not need Robinhood RPC. If a node binary is given a payer key, that is a deployment smell.
+
+---
+
+## Capacity and Sizing
+
+Each `/execute` is CPU-bound on BLAKE3 plus ML-DSA-44 sign. For small JSON payloads the sign dominates. Size the host for a few hundred signs per second per node if the agent runtime is bursty; most treasury flows are far below that. Memory footprint is the process plus the identity key. Disk is logs only unless you persist identities.
+
+Do not colocate sealed-node and all three validators on a laptop and then treat production latency as representative. Measure sequential three-node RTT from the SDK host. If the SDK runs in a region far from the fleet, sequential fetch triples the RTT. Place the SDK near the fleet; Robinhood Chain RPC latency is a separate budget that only applies after quorum when anchoring.
+
+Log volume: if you log every payload, you will log wei amounts and tool names. Sample health pings; redact production bodies.
+
+---
+
+## Disaster Recovery
+
+If all three nodes are lost but identities were backed up, restore binaries and identity files, start on the same ports, and confirm ping hashes. Historical `ConsensusResult` objects in application logs remain verifiable with restored public keys.
+
+If identities are lost, new keys will still form quorum among themselves. Old on-chain `attestExecution` bytes will not verify against the new keys. Keep the old public keys in an audit archive even after rotation.
+
+If Robinhood Chain RPC is down, the fleet can continue to produce hashes. Buffer agreed hashes and anchor when `ensureRobinhoodChain` succeeds again. Do not rewrite `task_id` if the payload must remain the same bytes for a deferred `anchorPqAttestation`; the execution hash is over payload bytes, not over the task id, unless the node includes it.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Connection refused 7701 | Process not running | Start alpha |
+| SDK skips a node | Missing `result` wrap | Wrap `NodeResult` |
+| Quorum false, all 200 | Hash mismatch | Canonical JSON; wei strings |
+| Helpful locally, fails in CI | Only one node started | Three processes |
+| Explorer empty | Never anchored | Optional EVM write |
+| `SpendingLimitExceeded` after consensus | Unrelated wei cap | Policy before execute |
+| Windows firewall | Port blocked | Allow 7701–7703 for localhost |
+| First URL hangs the client | Sequential fetch, no timeout | Health proxy; abort signal wrapper |
+| Hash changed after deploy | Canonicalization drift | Rollback; version the serializer |
+
+Canary payload:
+
+```bash
+curl -sS http://127.0.0.1:7701/execute \
+  -H "Content-Type: application/json" \
+  -d "{\"task_id\":\"health\",\"payload\":{\"action\":\"ping\"}}"
+```
+
+Repeat against 7702 and 7703. Compare `blake3_execution_hash`.
+
+---
+
+Keep a written inventory of node ids, ports, identity file paths, and SDK URL lists. When `VEYA_VALIDATOR_NODES` drifts from that inventory, quorum failures look like hash splits but are actually mixed-version fleets.
+
+---
+
+Canary hashes should be recorded after every deploy. A ping payload of `{ "action": "ping" }` must produce the same BLAKE3 on all three nodes. If alpha disagrees with beta and gamma, isolate alpha before restoring production traffic.
+
+Do not fund validator hosts with the `Veya.sol` payer. Consensus hosts hash and sign; they do not send Robinhood Chain transactions. `ensureRobinhoodChain` belongs on the SDK writer, not on the fleet.
+
+Ports 7701–7703 are conventional, not protocol-mandatory. If they change, update `VEYA_VALIDATOR_NODES` in the same change.
+
+---
+
+Independent failure domains matter more than extra nodes at threshold 2. Two nodes in one hypervisor plus a third on the same host is still one failure domain.
+
+---
+
+## See Also
+
+- [sdk/decentralized-compute.md](../sdk/decentralized-compute.md): client quorum rules
+- [sdk/pq-crypto.md](../sdk/pq-crypto.md): ML-DSA-44 and BLAKE3
+- [sdk/evm-anchoring.md](../sdk/evm-anchoring.md): `anchorPqAttestation`
+- [sdk/configuration.md](../sdk/configuration.md): `VEYA_VALIDATOR_NODES`
+- [sealed-node.md](./sealed-node.md): confidential execution beside the fleet
