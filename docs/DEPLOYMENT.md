@@ -350,3 +350,332 @@ Empty `0x` means you pointed at an EOA or the wrong network. `scripts/live-rpc.t
 
 ---
 
+## Contract Address Management
+
+| Stage | Address |
+|-------|---------|
+| **Live testnet (this package default)** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+| **Override** | `VEYA_CONTRACT_ADDRESS` or `VeyaClientConfig.contractAddress` |
+| **After a replacement deploy** | New `0x` address from `waitForDeployment()` |
+
+Post-replace steps:
+
+1. Update `src/chain.ts` `ROBINHOOD_TESTNET.contractAddress`
+2. Update `src/abi/index.ts` `VEYA_CONTRACT_ADDRESS`
+3. Set `VEYA_CONTRACT_ADDRESS` in operator and API environments
+4. Update `robinhood/deployments/testnet.json`
+5. Rebuild consumers (`https://api.veyanet.tech` file: dependency)
+
+**Never** mix a leftover address from another EVM with Robinhood Chain writes. The chain-id guard is necessary but not sufficient if you also override `contractAddress` to a random ERC-20: the ABI would still encode Veya function selectors against the wrong bytecode.
+
+---
+
+## Validator Cluster Deployment
+
+Consensus is **off-chain HTTP**. The chain does not run the quorum. After 2-of-3 agreement, operators optionally call `attestExecution`.
+
+### Ports
+
+| Instance | Default origin | Port |
+|----------|----------------|------|
+| alpha | `http://127.0.0.1:7701` | 7701 |
+| beta | `http://127.0.0.1:7702` | 7702 |
+| gamma | `http://127.0.0.1:7703` | 7703 |
+
+`resolveConfig()` reads `VEYA_VALIDATOR_NODES` as a comma-separated list, defaulting to the three localhost URLs above.
+
+### HTTP contract
+
+| Endpoint | Method | Body |
+|----------|--------|------|
+| `/execute` | POST | `{ "task_id": string, "payload": object }` |
+
+Successful nodes return `{ "result": NodeResult }` where `NodeResult` includes `blake3_execution_hash`, `mldsa_signature`, and `status: "success" | "fail"`.
+
+### SDK call
+
+```typescript
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient({
+  validatorNodes: [
+    "http://127.0.0.1:7701",
+    "http://127.0.0.1:7702",
+    "http://127.0.0.1:7703",
+  ],
+});
+
+const quorum = await client.runConsensus("health", { ping: true });
+if (!quorum.consensus_reached) {
+  throw new Error("quorum not reached");
+}
+```
+
+Threshold is **2**. `consensus_reached` is true when at least two successful nodes share the same BLAKE3 hash **and** at least two results were collected.
+
+### Production bind
+
+Bind validators to a private network. Put TLS in front. Do not expose `/execute` to the public internet without authentication. The SDK uses `fetch` with JSON; it does not implement mTLS itself.
+
+systemd sketch (alpha):
+
+```ini
+[Unit]
+Description=VEYA Validator Node alpha
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/validator-node alpha 7701
+Restart=always
+User=veya
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The validator binary itself is not this npm package; it is the VEYA node runtime. The SDK is the client.
+
+---
+
+## Sealed Node Deployment
+
+| Service | Port | Endpoint |
+|---------|------|----------|
+| sealed-node | 7800 | `POST /protected` |
+
+```bash
+export VEYA_SEALED_NODE_URL=http://127.0.0.1:7800
+```
+
+```typescript
+import { randomBytes } from "node:crypto";
+import { VeyaClient } from "@veya/sdk";
+
+const client = new VeyaClient();
+const sealed = await client.protectedExecute({
+  environmentId: envUuid,
+  agentId: agentUuid,
+  eventType: "audit",
+  payload: { step: "post-deploy" },
+  sessionEntropy: randomBytes(32),
+});
+```
+
+Request body fields are snake_case on the wire (`environment_id`, `payload_json`, `session_entropy_hex`) even though TypeScript params are camelCase. HTTP 4xx/5xx throw `sealed-node error: <status>`.
+
+After a successful sealed run, operators may persist chunks with `EvmAnchor.storeSealedState` (max 8192 bytes per chunk, plus a client-supplied BLAKE3 of the chunk).
+
+---
+
+## Post-Deploy Verification
+
+```mermaid
+flowchart TD
+    A[Operator workstation] --> B[npm test]
+    B --> C[scripts/doctor.ts]
+    C --> D{eth_chainId is 46630?}
+    D -->|no| E[Fix ROBINHOOD_RPC_URL]
+    D -->|yes| F[eth_getCode at Veya.sol]
+    F -->|empty| G[Wrong address or network]
+    F -->|bytecode| H[Optional funded write]
+    H --> I[registerPqOnchain]
+    I --> J[Explorer receipt]
+    C --> K[Validators 7701-7703]
+    C --> L[Sealed 7800]
+```
+
+| Step | Command |
+|------|---------|
+| Unit tests | `npm test` |
+| Typecheck | `npm run lint` |
+| Doctor | `npx tsx scripts/doctor.ts` |
+| Live RPC | `npx tsx scripts/live-rpc.ts` |
+| Quickstart | `npx tsx examples/quickstart.ts` |
+| Optional write | Node script calling `registerPqOnchain` |
+
+`npm test` does **not** send transactions. That is intentional: CI should not require funded keys.
+
+---
+
+## Environment Configuration
+
+### Operator workstation
+
+```bash
+export ROBINHOOD_RPC_URL=https://rpc.testnet.chain.robinhood.com
+export ROBINHOOD_CHAIN_ID=46630
+export ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
+export VEYA_CONTRACT_ADDRESS=0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
+export VEYA_DEPLOYER_PRIVATE_KEY=0x...          # writes only
+export VEYA_VALIDATOR_NODES=http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703
+export VEYA_SEALED_NODE_URL=http://127.0.0.1:7800
+```
+
+### Resolution order (`resolveConfig`)
+
+1. Explicit `VeyaClientConfig` fields
+2. Process environment
+3. `ROBINHOOD_TESTNET` constants
+
+`payerPrivateKey` has no default. Missing key means `client.evm` is `undefined` and `registerPqOnchain` throws `payerPrivateKey required for on-chain ops on Robinhood Chain`.
+
+### Local memory store
+
+```bash
+# Created on first storeMemory()
+# Path: ~/.veya/agent-memory.json
+chmod 700 ~/.veya   # POSIX
+```
+
+This JSON file is **not** the chain. Nullifiers on-chain (`flagMemoryNullifier`) are the spend-once audit flag; content lives locally.
+
+---
+
+## Networking and TLS
+
+| Concern | Testnet default | Hardened production |
+|---------|-----------------|---------------------|
+| Validator bind | `127.0.0.1` | Private VPC + TLS reverse proxy |
+| Sealed node | `127.0.0.1:7800` | mTLS between SDK host and node |
+| RPC | Official HTTPS testnet RPC | Dedicated RPC with key rotation if a vendor is used |
+| Memory JSON | Local disk only | Never network-mounted unencrypted |
+| Payer key | Env var | HSM / cloud KMS signing (custom Wallet) |
+
+`JsonRpcProvider` uses HTTPS for the default RPC URL. Validator and sealed defaults are cleartext HTTP on loopback.
+
+---
+
+## Monitoring
+
+| Signal | Source | Alert threshold |
+|--------|--------|-----------------|
+| RPC `eth_chainId` | `scripts/live-rpc.ts` | Not `0xb636` |
+| Contract code | `eth_getCode` | Empty or unexpected size drop |
+| Node uptime | `POST /execute` | Any validator down > 60s |
+| Quorum failures | `consensus_reached: false` | 3 consecutive failures |
+| Sealed node | `POST /protected` | HTTP not 200 |
+| Payer balance | `eth_getBalance` | Below a few million gas-worth of wei |
+| Reverts | `VeyaSdkError.code` | Spike in `SPENDING_EXCEEDED` / `COMMITMENT_EXISTS` |
+| Disk | `~/.veya` | > 80% volume capacity |
+
+Explorer links from `explorerTxUrl(hash)` should be stored next to application logs so an auditor can open the receipt without reconstructing the hash.
+
+---
+
+## Upgrade Procedures
+
+### Contract (not a proxy)
+
+v1 has no transparent proxy. An “upgrade” is a **new deploy** plus address cutover:
+
+1. Freeze writes on the old address at the application layer
+2. Deploy new bytecode
+3. Cut `VEYA_CONTRACT_ADDRESS` / `ROBINHOOD_TESTNET.contractAddress`
+4. Rebuild `@veya/sdk` and `https://api.veyanet.tech`
+5. Run `npm test` and `scripts/doctor.ts`
+
+State in mappings does not copy. Plan an application-level re-register of environments if you must move.
+
+### SDK publish / consume
+
+This repo consumes the package as `@veya/sdk`. After source changes:
+
+```bash
+npm install
+npm test
+npm run build
+# applications pick up dist/ after restart
+```
+
+### Validator rolling restart
+
+1. Stop gamma → ensure alpha+beta still reach 2-of-3
+2. Restart gamma, `POST /execute` health
+3. Repeat for beta, then alpha
+
+### Sealed node
+
+Restart is independent of validators. In-flight `protectedExec` calls fail with HTTP errors; retry at the application layer.
+
+---
+
+## Rollback
+
+| Component | Action | Reversible? |
+|-----------|--------|-------------|
+| SDK npm/file version | Pin previous `dist` | Yes |
+| Validator binary | Redeploy prior release | Yes |
+| Sealed-node binary | Redeploy prior release | Yes |
+| Env var `VEYA_CONTRACT_ADDRESS` | Point back at previous address | Yes, if old code still exists |
+| Mapping writes already mined | **Not reversible** | No |
+| `flagMemoryNullifier` | Immutable once set | No |
+
+Plan identifier namespaces (`bytes16` uuids) so a cutover does not collide with existing keys on a reused address.
+
+---
+
+## Gas and Funding
+
+Robinhood Chain uses ETH with 18 decimals. All `initSpendingLimit` / `recordSpend` amounts are **wei**.
+
+| Operation | Relative calldata size | Notes |
+|-----------|------------------------|-------|
+| `registerEnvironment` | Small | uuid + hash + uint8 |
+| `registerAgent` | Small | two uuids + role + hash |
+| `storeCommitment` | Small | uuid + bytes32 |
+| `attestExecution` | Large if sig present | `mldsaSig` up to 4627 bytes |
+| `storeSealedState` | Large | chunk up to 8192 bytes |
+
+Fund the payer with enough testnet ETH to cover several `attestExecution` transactions, not only tiny `storeCommitment` calls. `tx.wait()` returns the hash used in explorer URLs; gas used is on the receipt.
+
+Spending-limit **application** amounts (treasury caps) are independent of **gas**. Recording `recordSpend(1e18)` means “one ETH of agent spend”, not “one ETH of gas”.
+
+---
+
+## Deployment Checklist
+
+### Pre-flight
+
+- [ ] `node --version` is 20+
+- [ ] `npm install` in `@veya/sdk`
+- [ ] `npm test` passes (chain id 46630, ABI camelCase, PQ round-trip)
+- [ ] `npm run build` succeeds
+- [ ] `VEYA_DEPLOYER_PRIVATE_KEY` is unset in git and set only in the operator shell if writes are planned
+- [ ] Payer has testnet ETH if writes are planned
+
+### Consume live contract
+
+- [ ] `ROBINHOOD_RPC_URL` reachable
+- [ ] `eth_chainId` returns `0xb636`
+- [ ] `eth_getCode` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` is non-empty
+- [ ] `npx tsx scripts/doctor.ts` exits 0
+- [ ] `npx tsx scripts/live-rpc.ts` exits 0
+- [ ] `npx tsx examples/quickstart.ts` prints digest + defaults
+
+### Off-chain fleet
+
+- [ ] Three validators respond on 7701–7703
+- [ ] `runConsensus` returns `consensus_reached: true` for a shared payload
+- [ ] Sealed node responds on 7800 `/protected`
+- [ ] `~/.veya` directory mode is operator-only
+
+### Optional first write
+
+- [ ] `registerPqOnchain` returns two explorer URLs
+- [ ] Receipts visible on `explorer.testnet.chain.robinhood.com`
+- [ ] `getEnvironment` returns `exists: true` for the new uuid
+
+---
+
+## See Also
+
+| Guide | Description |
+|-------|-------------|
+| [README.md](./README.md) | Documentation hub |
+| [CLI.md](./CLI.md) | Node operator surface |
+| [programs/veya-contract.md](./programs/veya-contract.md) | Function reference |
+| [programs/storage-layouts.md](./programs/storage-layouts.md) | Mapping keys and slots |
+| [api/types-reference.md](./api/types-reference.md) | TypeScript types |
+| [../README.md](../README.md) | Package intro |
+| [../../deployments/testnet.json](../../deployments/testnet.json) | Live address record |
