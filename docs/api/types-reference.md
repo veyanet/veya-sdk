@@ -377,3 +377,435 @@ Public ABI surface includes:
 
 ---
 
+## Consensus types
+
+```typescript
+type NodeResult = {
+  node_id: string;
+  blake3_execution_hash: string;
+  mldsa_signature: string;
+  mldsa_public_key_hex?: string;
+  status: "success" | "fail";
+};
+
+type ConsensusResult = {
+  task_id: string;
+  agreed_blake3_hash: string | null;
+  node_results: NodeResult[];
+  consensus_reached: boolean;
+  threshold: number;
+};
+
+declare function runConsensus(
+  nodeUrls: string[],
+  taskId: string,
+  payload: object,
+): Promise<ConsensusResult>;
+```
+
+| Field | Semantics |
+|-------|-----------|
+| `blake3_execution_hash` | 64-char hex; counted only when `status === "success"` |
+| `threshold` | Always `2` in this package |
+| `agreed_blake3_hash` | Hash with the highest success count if `max >= 2`, else `null` |
+| `consensus_reached` | `max >= 2 && results.length >= 2` |
+
+Wire: `POST {url}/execute` with `{ task_id, payload }`. The SDK reads `body.result` as `NodeResult`. Nodes that omit `result` are skipped (they do not contribute to `node_results`).
+
+`VeyaClient.runConsensus(taskId, payload)` uses `this.config.validatorNodes`.
+
+---
+
+## SealedExecResult
+
+```typescript
+type SealedPayload = {
+  ciphertext: number[];
+  blake3_commitment: string;
+  context_label: string;
+};
+
+type SealedExecResult = {
+  sealed: SealedPayload;
+  output_blake3_hash: string;
+  mldsa_signature: string;
+  verified: boolean;
+};
+
+declare function protectedExec(
+  sealedNodeUrl: string,
+  params: {
+    environmentId: string;
+    agentId: string;
+    eventType: string;
+    payload: object;
+    sessionEntropy: Uint8Array;
+  },
+): Promise<SealedExecResult>;
+```
+
+| JSON field to node | Source |
+|--------------------|--------|
+| `environment_id` | `params.environmentId` |
+| `agent_id` | `params.agentId` |
+| `event_type` | `params.eventType` |
+| `payload_json` | `JSON.stringify(params.payload)` |
+| `session_entropy_hex` | hex of 32-byte entropy |
+
+Response: prefers `body.result` as `SealedExecResult`. A flat body with `blake3_execution_hash` is accepted as a compatibility shape and normalized into `output_blake3_hash`.
+
+HTTP not OK throws `Error("sealed-node error: " + status)`.
+
+---
+
+## MemoryEntry
+
+```typescript
+type MemoryEntry = {
+  id: string;
+  environmentId: string;
+  agentId: string;
+  data: string;
+  blake3ContentHash: string;
+  nullified: boolean;
+};
+
+declare function storeMemory(environmentId: string, agentId: string, data: string): Promise<MemoryEntry>;
+declare function readMemory(environmentId: string, id: string): Promise<MemoryEntry>;
+declare function invalidateMemory(environmentId: string, id: string): void;
+declare function listMemory(environmentId: string): MemoryEntry[];
+```
+
+Persistence: `~/.veya/agent-memory.json` (see `MEMORY_FILE` in `src/memory/store.ts`). Keys are `environmentId:id`.
+
+| Function | Behavior |
+|----------|----------|
+| `storeMemory` | New UUID `id`, `blake3ContentHash = hashBlake3(data)`, `nullified: false` |
+| `readMemory` | Throws if missing, nullified, or hash mismatch |
+| `invalidateMemory` | Sets `nullified: true` locally |
+| `listMemory` | Filter by `environmentId` |
+
+On-chain counterpart is `flagMemoryNullifier(environmentUuid, memoryId)` with `bytes16` ids. Local string UUIDs must be converted to 16 bytes before the EVM call.
+
+---
+
+## SpendingLimit
+
+```typescript
+type SpendingLimit = {
+  agentId: string;
+  environmentId: string;
+  maxAmount: bigint | number;
+  periodSecs: number;
+  spentAmount: bigint | number;
+  periodStart: number;
+};
+
+declare function setSpendingLimit(
+  environmentId: string,
+  agentId: string,
+  maxAmount: bigint | number,
+  periodSecs: number,
+): SpendingLimit;
+
+declare function getSpendingLimit(
+  environmentId: string,
+  agentId: string,
+): SpendingLimit | undefined;
+
+declare function recordSpend(
+  environmentId: string,
+  agentId: string,
+  amount: bigint | number,
+): boolean;
+
+declare function checkSpendAllowed(
+  environmentId: string,
+  agentId: string,
+  amount: bigint | number,
+): boolean;
+```
+
+This module is an **in-process** cap used before consensus / sealed execution. It is **not** the on-chain mapping. Units are **wei** when you treat amounts as native ETH. Arithmetic uses `BigInt`.
+
+| Rule | Detail |
+|------|--------|
+| Missing limit | `recordSpend` returns `true` (allowed); `checkSpendAllowed` returns `true` |
+| Period rollover | If `now - periodStart >= periodSecs`, spent resets to 0 |
+| Over cap | `recordSpend` throws; `checkSpendAllowed` returns `false` |
+
+On-chain: `EvmAnchor.initSpendingLimit(agentUuid, maxAmount: bigint, periodSecs)` and `recordSpend(agentUuid, amount: bigint)` against `spendingLimits[agentUuid]`.
+
+---
+
+## PolicyAgent
+
+```typescript
+type PolicyDecision = {
+  allowed: boolean;
+  reason: string;
+  routed?: McpMessage;
+};
+
+type PolicyAgentConfig = {
+  environmentId: string;
+  agentId: string;
+  maxWeiPerAction?: number;
+  requireConsensus?: boolean;
+};
+
+declare class PolicyAgent {
+  readonly config: PolicyAgentConfig;
+  constructor(config: PolicyAgentConfig);
+  evaluateToolCall(msg: Omit<McpMessage, "policyStatus">): PolicyDecision;
+  gateConsensus(required: boolean): PolicyDecision;
+}
+```
+
+`evaluateToolCall` runs `routeMessage` (in-memory tool ACL). Denied tools return `reason: "tool not in agent policy"`. If `maxWeiPerAction` is set, `checkSpendAllowed` is invoked with that wei cap for `msg.fromAgent`.
+
+`gateConsensus`:
+
+| `requireConsensus` (config) | `required` arg | Result |
+|-----------------------------|----------------|--------|
+| true | true | allowed, consensus required and enabled |
+| true | false | denied, consensus required for this environment |
+| false | any | allowed, consensus optional |
+
+Amounts are **wei on Robinhood Chain**. Do not pass another chain’s native unit.
+
+---
+
+## Coordination and Kyber
+
+```typescript
+type McpMessage = {
+  id: string;
+  fromAgent: string;
+  toAgent: string;
+  tool: string;
+  payload: unknown;
+  policyStatus: "allowed" | "denied";
+  kyberSessionId?: string;
+  mlDsaSig?: string;
+};
+
+declare function setToolPolicy(agentId: string, tool: string, allowed: boolean): void;
+declare function routeMessage(msg: Omit<McpMessage, "policyStatus">): McpMessage;
+
+type SecureRouteOptions = {
+  senderPublicKey: Uint8Array;
+  senderPrivateKey: Uint8Array;
+};
+
+declare function routeSecureMessage(
+  msg: Omit<McpMessage, "policyStatus" | "kyberSessionId" | "mlDsaSig">,
+  identity: SecureRouteOptions,
+): Promise<McpMessage>;
+
+declare function verifySecureMessage(msg: McpMessage, senderPublicKey: Uint8Array): Promise<boolean>;
+
+type KyberSession = {
+  sessionId: string;
+  ciphertext: string;
+  sharedSecretHex: string;
+  createdAt: number;
+};
+
+declare function getNodeKyberPublicKey(): Uint8Array;
+declare function establishKyberSession(fromAgent: string, toAgent: string): Promise<KyberSession>;
+declare function getKyberSession(sessionId: string): KyberSession | undefined;
+```
+
+In-process `setToolPolicy` is the SDK ACL. On-chain ACL is `defineToolPolicy` on Veya.sol. Keep them aligned in production: a tool allowed in memory but denied on-chain (or the reverse) is an operator bug.
+
+`routeSecureMessage` encapsulates to the process Kyber pubkey, sets `kyberSessionId`, and ML-DSA-signs the JSON envelope. `verifySecureMessage` returns false if sig or session id is missing.
+
+---
+
+## PQ module (`@veya/sdk/pq`)
+
+Also re-exported as namespace `pq` from `@veya/sdk`.
+
+| Function | Async | Output |
+|----------|-------|--------|
+| `generatePQIdentity()` | yes | `{ publicKey, privateKey }` ML-DSA-44 |
+| `signPQ(msg, sk)` | yes | `Uint8Array` detached sig |
+| `verifyPQ(sig, msg, pk)` | yes | `boolean` |
+| `publicKeyHashBlake3(pk)` | yes | 64-char hex |
+| `generateKyberKeys()` | no | `{ publicKey, privateKey }` ML-KEM-768 |
+| `encapsulateKyber(pk)` | no | `{ ciphertext, sharedSecret }` |
+| `decapsulateKyber(ct, sk)` | no | `sharedSecret` |
+| `hashBlake3(data)` | yes | hex string |
+| `hashBlake3Bytes(data)` | yes | `Uint8Array` length 32 |
+
+Sign the **raw 32-byte digest** when attesting, not the hex UTF-8 string, unless your validator fleet hashes the same encoding.
+
+---
+
+## VeyaSdkError
+
+```typescript
+type VeyaErrorCode =
+  | "CHAIN_MISMATCH"
+  | "RPC_UNREACHABLE"
+  | "MISSING_PAYER"
+  | "INVALID_HEX"
+  | "INVALID_UUID"
+  | "INVALID_ADDRESS"
+  | "INVALID_CONFIG"
+  | "CONSENSUS_UNREACHABLE"
+  | "CONSENSUS_NO_QUORUM"
+  | "SEALED_UNREACHABLE"
+  | "SEALED_REJECTED"
+  | "ANCHOR_REVERT"
+  | "COMMITMENT_EXISTS"
+  | "ENVIRONMENT_EXISTS"
+  | "ENVIRONMENT_MISSING"
+  | "ATTESTATION_EXISTS"
+  | "PQ_ATTESTATION_EXISTS"
+  | "SPENDING_EXCEEDED"
+  | "PQ_VERIFY_FAILED"
+  | "MEMORY_INTEGRITY"
+  | "MEMORY_NULLIFIED"
+  | "MEMORY_MISSING";
+
+declare class VeyaSdkError extends Error {
+  readonly code: VeyaErrorCode;
+  readonly details?: Record<string, unknown>;
+  toJSON(): { name: string; code: VeyaErrorCode; message: string; details?: Record<string, unknown> };
+}
+
+declare function fromAnchorRevert(err: unknown): VeyaSdkError;
+declare function assertHex32(value: string, label: string): string;
+declare function assertHexAddress(value: string, label?: string): string;
+```
+
+Known Solidity selectors mapped in `VEYA_REVERT_SELECTORS`:
+
+| Selector | Code |
+|----------|------|
+| `0x145718a7` | `COMMITMENT_EXISTS` |
+| `0xb6d54abb` | `ENVIRONMENT_EXISTS` |
+| `0xb90193fa` | `ENVIRONMENT_MISSING` |
+| `0x631ecd51` | `ATTESTATION_EXISTS` |
+| `0x2d37333f` | `PQ_ATTESTATION_EXISTS` |
+| `0x8a9e71ea` | `SPENDING_EXCEEDED` |
+
+Unknown selectors become `ANCHOR_REVERT` with `{ selector, data }` in `details`. Branch on `code`, not on `message` substrings.
+
+---
+
+## Solidity struct mirrors
+
+These are the values returned by public mapping getters. They are not TypeScript exports today; decode via ethers `Result` / named tuple.
+
+### EnvironmentType
+
+| Value | Variant | Typical `registerPqOnchain` |
+|-------|---------|------------------------------|
+| `0` | `Execution` | explicit `0` |
+| `1` | `SecureEnclave` | default (`1`) |
+| `2` | `Governance` | explicit `2` |
+
+Invalid: `envType > 2` → `InvalidEnvironmentType`.
+
+### Agent role (`uint8`)
+
+| Value | Convention in this SDK |
+|-------|------------------------|
+| `0` | Coordinator |
+| `1` | Executor |
+| `2` | Policy |
+
+Invalid: `agentRole > 2` → `InvalidAgentRole`. Solidity stores a raw `uint8`, not an enum type.
+
+### Environment (getter `environments(bytes16)`)
+
+| Field | Solidity | Notes |
+|-------|----------|-------|
+| `owner` | `address` | `msg.sender` at register |
+| `uuid` | `bytes16` | mapping key |
+| `pqPubkeyHash` | `bytes32` | BLAKE3 of ML-DSA pubkey |
+| `envType` | `EnvironmentType` | 0/1/2 |
+| `createdAt` | `uint64` | `block.timestamp` |
+| `revision` | `uint32` | `1` at create |
+| `exists` | `bool` | tombstone for empty slots |
+
+### Agent, Attestation, others
+
+See [storage-layouts.md](../programs/storage-layouts.md) for packed slot diagrams. TypeScript write path always goes through `EvmAnchor` rather than hand-packed storage.
+
+---
+
+## Explorer helpers
+
+```typescript
+declare function explorerTxUrl(txHash: string, explorerBase?: string): string;
+declare function explorerAddressUrl(address: string, explorerBase?: string): string;
+```
+
+| Input | Output |
+|-------|--------|
+| hash without `0x` | base + `/tx/0x` + hash |
+| hash with `0x` | base + `/tx/` + hash |
+| address | base + `/address/` + address |
+
+Default base: `ROBINHOOD_TESTNET.explorerUrl`. Trailing slash on the base is stripped.
+
+---
+
+## Serialization notes
+
+| Type | JSON / TS | EVM |
+|------|-----------|-----|
+| BLAKE3 hash | 64-char lowercase hex | `bytes32` |
+| ML-DSA sig | hex string or `Uint8Array` | `bytes` ≤ 4627 |
+| Environment uuid | UUID string locally; `Uint8Array(16)` on writes | `bytes16` |
+| `NodeStatus` | `"success"` / `"fail"` | not stored on-chain |
+| Consensus payload | `JSON.stringify` must match across nodes | digest only |
+| Sealed HTTP body | snake_case fields | chunk `bytes` + hash |
+| Wei | `bigint` | `uint256` |
+| Tool name | JS string | UTF-8, length ≤ 64 |
+
+Domain-separated execution hashing (operator convention, not enforced by Solidity):
+
+```
+prefix || environment_id || agent_id || event_type || payload_json
+```
+
+Validators and the sealed node must share this encoding or quorum will never agree.
+
+---
+
+## Cross-layer mapping
+
+| Concept | TypeScript | Veya.sol |
+|---------|------------|----------|
+| PQ pubkey fingerprint | `string` hex / `Uint8Array` 32 | `bytes32 pqPubkeyHash` |
+| Execution hash | `hashBlake3()` | `bytes32 blake3Hash` |
+| ML-DSA signature | `Uint8Array` | `bytes mldsaSig` |
+| Node attestation | `NodeResult` |: (off-chain) |
+| Quorum result | `ConsensusResult` | optional `attestExecution` |
+| Sealed ciphertext | `SealedPayload` | `sealedStates[key].ciphertext` |
+| Environment id | UUID string / `Uint8Array(16)` | `bytes16` mapping key |
+| Spend cap | `SpendingLimit.maxAmount` wei | `uint256 maxAmount` |
+| Kyber session | `KyberSession` | never stored |
+| Instruction | `InstructionName` camelCase | same function name |
+
+```mermaid
+flowchart LR
+    TS["TS hashBlake3 hex"] --> BYTES["Uint8Array 32"]
+    BYTES --> EVM["bytes32 in Veya.sol"]
+```
+
+---
+
+## See Also
+
+- [veya-contract.md](../programs/veya-contract.md): Function handlers, events, errors
+- [storage-layouts.md](../programs/storage-layouts.md): Mapping keys and packed slots
+- [DEPLOYMENT.md](../DEPLOYMENT.md): Env vars and chain-id guard
+- [CLI.md](../CLI.md): Node operator scripts
+- [README.md](../README.md): Hub
+- Package source: `src/index.ts` barrel exports
