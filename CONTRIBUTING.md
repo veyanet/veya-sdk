@@ -1,138 +1,72 @@
-# Contributing to `@veya/sdk`
+<div align="center">
 
-Thank you for your interest in contributing to the VEYA ecosystem! The `@veya/sdk` is the primary interface developers use to build privacy-preserving agents on Solana. We maintain strict standards for code quality, cryptographic boundaries, and type safety to ensure a secure developer experience.
+  # Contributing to @veya/sdk
 
-This guide outlines how to set up your environment, our architectural guidelines, and the process for submitting Pull Requests.
+  **Robinhood Chain TypeScript SDK: PQ identity, sealed execution, Veya.sol.**
+
+  **[README](README.md)** • **[Security](SECURITY.md)** • **[Documentation Hub](docs/README.md)** • **[Code of Conduct](CODE_OF_CONDUCT.md)**
+
+</div>
 
 ---
 
-## 1. Development Setup
+## Philosophy
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher (required for native `fetch` and `webcrypto`).
-- **Package Manager**: We use `npm` for dependency management.
+This package settles on **Robinhood Chain**, not Solana. Contributions must not reintroduce program IDs, PDA helpers, `bs58` payer secrets, or lamports as the native unit. Spending is **wei**. Instruction names are Solidity **camelCase**.
 
-### Initializing the Workspace
+Post-quantum first: new commitment paths use BLAKE3. Identities use ML-DSA-44. Coordination sessions use Kyber-768. Do not add SHA-256 on SDK commitment paths.
+
+Fail closed: unreachable sealed-node or missing quorum is an error, not a success payload.
+
+---
+
+## Setup
+
 ```bash
-# 1. Clone the repository (or your fork)
-git clone https://github.com/veyanet/veya-sdk.git
-cd veya-sdk
-
-# 2. Install dependencies
 npm install
-
-# 3. Build the project to verify setup
-npm run build
-```
-
----
-
-## 2. Testing Your Changes
-
-The SDK supports two testing tiers to ensure reliability and speed:
-
-### Unit & Mock Testing
-For fast, offline unit checks, we use [Vitest](https://vitest.dev/) along with fetch stubs. This allows you to verify API payload construction without requiring a live gateway or network connection.
-
-```bash
-# Run the unit tests
-npm run test
-
-# Run tests in watch mode during active development
-npm run test:watch
-```
-
-### Live Integration Testing
-To test real API behaviors, consensus coordination, and decentralized compute flows against the live server:
-1. Set the target environment variables in your test environment:
-   ```bash
-   VEYA_API_URL=https://api.veyanet.tech
-   VEYA_API_KEY=your_dev_api_key
-   ```
-2. Run the integration test suite to execute live endpoints:
-   ```bash
-   npm run test
-   ```
-
-### Testing Rules
-*   **Isolate Public Networks**: Avoid sending tests directly to Solana mainnet or external production endpoints. Always use local devnet anchors or fetch mocks.
-*   **Assert Consensus & Responses**: When adding checks for decentralized compute, assert that consensus status returns successfully and nodes are correctly cataloged.
-*   **Path Coverage**: Ensure any new classes or helper functions include corresponding unit test cases in the `tests/` folder.
-
----
-
-## 3. Code Style & Linting
-
-We enforce strict linting to maintain a clean, uniform codebase.
-
-```bash
-# Check for linting errors
+npm test
 npm run lint
-
-# Automatically fix linting and formatting errors (Prettier + ESLint)
-npm run format
+npm run build
+npx tsx scripts/doctor.ts
 ```
 
-- We use **TypeScript strict mode**. `any` types are strictly prohibited unless interacting with opaque external libraries.
-- Use explicit return types for all public-facing methods.
-- Document all public methods and interfaces using TSDoc comments (these drive IDE tooltips).
+Node 20+. Do not commit `.env`.
 
 ---
 
-## 4. Architectural Boundaries (CRITICAL)
+## Layout (where to change things)
 
-The `@veya/sdk` implements a strict **Zero-Knowledge Privacy Model**. When contributing, you must ensure that your changes do not compromise this model.
-
-### 🚫 Never Transmit Plaintext Configuration
-If you are modifying agent deployment logic, ensure `encryptAgentConfig()` is correctly used. Plaintext configurations must **never** be included in `fetch` payloads.
-
-### 🚫 Never Transmit Plaintext Memory
-If you are modifying the memory module, ensure that `memory.storeContent()` hashes the text locally via `sha256Hex()` before transmission. The API should only ever receive the 64-character hex digest.
-
-### 🚫 Do Not Add External Crypto Dependencies
-We rely exclusively on the native `Web Crypto API` (`globalThis.crypto.subtle` in browsers, `node:crypto` in Node). Do not introduce third-party cryptography libraries (e.g., `crypto-js`, `forge`) as they increase bundle size and attack surface. The only exception is `bs58` for Solana base58 encoding.
-
----
-
-## 5. Adding New Resources
-
-If you are contributing support for a new VEYA API resource namespace (e.g., a new `/v1/analytics` route):
-
-1. **Create the Types**: Define the request/response shapes in `src/types/`.
-2. **Create the Module**: Implement the resource class in `src/resources/your-module.ts`. It must accept the shared `HttpClient` instance in its constructor.
-3. **Register the Module**: Add your module to the main `Veya` client class in `src/index.ts`.
-4. **Update Documentation**:
-   - Add the new endpoints to `docs/api-map.md`.
-   - Write a dedicated guide or update an existing one in the `docs/` folder.
-5. **Write Tests**: Create `tests/your-module.test.ts`.
-
-Refer to `docs/ARCHITECTURE.md` for a deep dive into the SDK extension patterns.
+| Path | Own this when |
+|------|----------------|
+| `src/client/` | EvmAnchor, VeyaClient, receipt parsing |
+| `src/pq/` | ML-DSA, Kyber, BLAKE3 |
+| `src/compute/` | 2-of-3 consensus |
+| `src/sealed/` | protectedExec |
+| `src/errors/` | VeyaSdkError mapping |
+| `docs/` | 500-line technical notes: keep them accurate |
+| `../contracts/Veya.sol` | protocol source pin; ABI in `src/abi/` must stay in lockstep |
 
 ---
 
-## 6. Pull Request Process
+## Tests
 
-1. **Fork the repository** and create your branch from `main`.
-2. If you've added code that should be tested, **add tests**.
-3. If you've changed APIs, **update the documentation** in the `docs/` folder and TSDoc comments.
-4. Ensure the test suite passes (`npm run test`).
-5. Ensure your code lints (`npm run lint`).
-6. Create a detailed Pull Request. Include:
-   - What the PR solves (reference any open issue numbers).
-   - How you tested it.
-   - Any breaking changes to the public API.
-7. Update the `CHANGELOG.md` in the `[Unreleased]` section.
+- Unit: `npm test` (PQ round-trip, chain defaults, operator surfaces)
+- Live RPC: `npx tsx scripts/live-rpc.ts` (needs network)
+- Consensus / sealed: local nodes on 7701–7703 and 7800
 
-### Breaking Changes
-The `@veya/sdk` is heavily relied upon by production infrastructure. We avoid breaking changes whenever possible. If your PR introduces a breaking change (renaming a public method, changing an interface shape, etc.), please discuss it in an Issue first.
+A change that claims chain success without talking to Robinhood RPC or Veya.sol will be rejected.
 
 ---
 
-## 7. Reporting Issues
+## Pull requests
 
-If you find a bug or have a feature request, please [open an issue](https://github.com/veyanet/veya-sdk/issues/new).
+1. Describe the risk if the change had shipped wrong.
+2. Name the proof (test, doctor output, explorer tx).
+3. Do not invent chain receipts or stand-in success payloads. If a node did not run, the SDK must throw.
+4. Update `docs/` when the public API or chain defaults change.
 
-- **Bug Reports**: Include Node.js version, SDK version, a minimal reproducible example, and exactly what error was thrown.
-- **Security Vulnerabilities**: Do **NOT** open a public issue. Refer to `SECURITY.md` for our responsible disclosure process.
+---
 
-Thank you for helping make VEYA better!
+## License
+
+MIT. By contributing you agree the work is licensed under [LICENSE](LICENSE).
