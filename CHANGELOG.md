@@ -1,8 +1,26 @@
 # Changelog
 
-All notable changes to the `@veya/sdk` will be documented in this file.
+All notable changes to the `@veya/sdk` package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.0.0] — 2026-08-31
+
+### Added
+- **Canonical Package Release**: Official `@veya/sdk` release for Robinhood Chain with hosted API (`https://api.veyanet.tech`).
+- **Post-Quantum Cryptography Stack**: Integrated FIPS 204 ML-DSA-44 lattice signatures, FIPS 203 Kyber-768 key encapsulation, and BLAKE3-256 digesting.
+- **EVM Protocol Settlement (`Veya.sol`)**: Full `EvmAnchor` support for on-chain environment registration, commitments (`storeCommitment`), tool policies (`defineToolPolicy`), spending limits in **wei**, and memory nullifiers.
+- **Robinhood Chain Testnet Integration**: Direct JSON-RPC connection to Robinhood Chain (Chain ID `46630`) with automated `eth_chainId` validation via `ensureRobinhoodChain()`.
+- **Inlined ABI Architecture**: Bundled `Veya.sol` ABI directly inside `src/abi/` to remove external monorepo dependencies.
+- **Typed Error Normalization**: Introduced `VeyaSdkError` with custom Solidity selector mapping and `isVeyaSdkError` typeguard.
+- **Operator Diagnostics**: Built `scripts/doctor.ts` and `scripts/live-rpc.ts` for automated RPC diagnostics and live receipt auditing.
+
+### Changed
+- Standardized all instruction call names to Solidity camelCase (`storeCommitment`, `registerEnvironment`, `recordSpend`).
+- Converted spend limit units to native **wei** (18-decimal).
+- Configured default sealed-node port to `7800` and validator cluster ports to `7701-7703`.
 
 ---
 
@@ -11,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 - **Decentralized Compute Resource**: Added `veya.compute` (`DecentralizedComputeResource`) to orchestrate multi-node consensus-based tasks.
 - **Consensus Verification**: Integrated multi-node Ed25519 signature checking and state hash quorum matching.
-- **On-Chain State Anchoring**: Support for anchoring decentralized compute consensus outcomes directly to the Solana blockchain via SPL Memos.
+- **On-Chain State Anchoring**: Support for anchoring decentralized compute consensus outcomes directly to the blockchain via SPL Memos.
 - **Documentation**: Added the new `decentralized-compute.md` manual and updated the master index and root README files.
 
 ---
@@ -21,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 - **Comprehensive Documentation Suite**: Complete rewrite of all technical documentation (`api-keys`, `api-map`, `ARCHITECTURE`, `authentication`, `configuration`, `crypto`, `environments-and-agents`, `error-handling`, `executions`, `memory`, `proofs-and-anchoring`, `quickstart`, `solana`).
 - **Error Handling**: Exported `VeyaErrorCodes` enum for typed error matching (e.g., `LIMIT_EXCEEDED`, `INVALID_SIGNATURE`).
-- **Multi-Environment Support**: Added `resolveConfig()` utility to easily swap between staging and production API urls.
+- **Multi-Environment Support**: Added `resolveConfig()` utility to easily swap between staging and production API URLs.
 
 ### Fixed
 - Replaced ambiguous `timeout` configuration field with `timeoutMs` to enforce clarity (defaults to `30000` ms).
@@ -63,7 +81,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - **Solana Relayer Integration**: Connected the SDK to the VEYA relayer for subsidized SPL Memo broadcasting.
-- `proofs.verifyTransaction()`: Public endpoint implementation allowing clients to cross-reference Solana transaction signatures with the VEYA proof registry.
+- `proofs.verifyTransaction()`: Public endpoint implementation allowing clients to cross-reference transaction signatures with the VEYA proof registry.
 - **PDA Identity**: Added endpoints for environment and agent PDA registration (`solana.environmentRegistration` and `solana.agentRegistration`).
 
 ### Fixed
@@ -75,7 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [0.0.2-alpha] — 2026-04-10
 
 ### Added
-- **Wallet JWT Authentication**: Implemented the two-step `GET /auth/nonce` and `POST /auth/verify` flow for Solana wallet sign-in.
+- **Wallet JWT Authentication**: Implemented the two-step `GET /auth/nonce` and `POST /auth/verify` flow for wallet sign-in.
 - `HttpClient` interceptor to automatically attach `Authorization: Bearer` or `X-Api-Key` headers to all protected routes.
 - Initial implementation of the `memory` namespace for storing 64-character SHA-256 hex digests.
 
