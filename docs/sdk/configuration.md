@@ -1,6 +1,6 @@
 # SDK Configuration
 
-**Configure `@veya/sdk` for post-quantum agent settlement on Robinhood Chain without a hosted API server.**
+**Configure `@veyanet/sdk` for post-quantum agent settlement on Robinhood Chain without a hosted API server.**
 
 The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol` address, validator fleet URLs, and sealed-node endpoints. All configuration resolves through `resolveConfig()` with environment-variable fallbacks. Settlement is EVM: native units are wei, function names are camelCase, and the ABI is inlined in `src/abi` so the package does not depend on `@veya/program`.
 
@@ -36,7 +36,7 @@ The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol`
 
 ## Purpose and Scope
 
-This document describes how `@veya/sdk` discovers Robinhood Chain endpoints, how constructor options override environment variables, and which modules consume each resolved field. Configuration is a local, deterministic merge. There is no remote configuration service on the critical path, and the SDK never fetches a program IDL at runtime.
+This document describes how `@veyanet/sdk` discovers Robinhood Chain endpoints, how constructor options override environment variables, and which modules consume each resolved field. Configuration is a local, deterministic merge. There is no remote configuration service on the critical path, and the SDK never fetches a program IDL at runtime.
 
 The configuration surface is intentionally small. Cryptographic modules (`pq`, `memory`, `coordination`) do not require an RPC URL or a private key. Anchoring and on-chain writes require `payerPrivateKey`, `rpcUrl`, `contractAddress`, and `chainId`. Consensus and sealed execution require only HTTP origins for the operator-run node fleet.
 
@@ -188,7 +188,7 @@ export type ResolvedVeyaConfig = {
 `resolveConfig(config)` merges explicit options with environment variables and defaults. Call it directly when resolved values are needed without instantiating `VeyaClient`.
 
 ```typescript
-import { resolveConfig } from "@veya/sdk";
+import { resolveConfig } from "@veyanet/sdk";
 
 const cfg = resolveConfig({
   rpcUrl: "https://rpc.testnet.chain.robinhood.com",
@@ -274,7 +274,7 @@ Native currency decimals are 18. Converting a human amount such as `0.01 ETH` to
 No payer is required. This path is the default for local development and CI hashing tests.
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: ["http://127.0.0.1:7701", "http://127.0.0.1:7702", "http://127.0.0.1:7703"],
@@ -302,7 +302,7 @@ const sealed = await client.protectedExecute({
 `payerPrivateKey` enables `client.evm` (`EvmAnchor`). The constructor does not send a transaction. The first write calls `ensureRobinhoodChain()`, which issues `eth_chainId` against the configured RPC.
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
@@ -422,10 +422,10 @@ Connecting a wallet to Ethereum mainnet (`1`), a local Anvil (`31337`), or any o
 Import paths:
 
 ```typescript
-import { VeyaClient, resolveConfig, pq, EvmAnchor } from "@veya/sdk";
-import { runConsensus } from "@veya/sdk";
-import { protectedExec } from "@veya/sdk";
-import { ROBINHOOD_TESTNET, INSTRUCTION_NAMES } from "@veya/sdk";
+import { VeyaClient, resolveConfig, pq, EvmAnchor } from "@veyanet/sdk";
+import { runConsensus } from "@veyanet/sdk";
+import { protectedExec } from "@veyanet/sdk";
+import { ROBINHOOD_TESTNET, INSTRUCTION_NAMES } from "@veyanet/sdk";
 ```
 
 `INSTRUCTION_NAMES` is a camelCase catalog of `Veya.sol` write functions. Tests assert that `register_environment` is not present. Use these names when logging, when matching ABI entries, and when documenting operator playbooks.
@@ -474,7 +474,7 @@ sequenceDiagram
     participant Val as validator-node x3
     participant Seal as sealed-node
     participant RPC as Robinhood RPC
-    participant SDK as @veya/sdk
+    participant SDK as @veyanet/sdk
 
     Op->>Val: alpha 7701, beta 7702, gamma 7703
     Op->>Seal: sealed-node 7800
@@ -499,7 +499,7 @@ Local nodes never replace chain id checks. Even when validators run on loopback,
 
 ```typescript
 import { readFileSync } from "node:fs";
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const payerPrivateKey = readFileSync("/run/secrets/deployer.key", "utf8").trim();
 const client = new VeyaClient({
@@ -525,7 +525,7 @@ Never share `payerPrivateKey` across environments. Rotate on compromise. Spendin
 ### Config validation helper
 
 ```typescript
-import { resolveConfig, isRobinhoodTestnet } from "@veya/sdk";
+import { resolveConfig, isRobinhoodTestnet } from "@veyanet/sdk";
 
 function assertAnchoringReady() {
   const cfg = resolveConfig();
@@ -553,7 +553,7 @@ function assertAnchoringReady() {
 | Classical crypto drift | SDK uses ML-DSA-44 + BLAKE3 + Kyber-768; no SHA-256 on new paths |
 | Unit confusion | Spend amounts are wei; `maxWeiPerAction` is the policy field name |
 
-Load secrets from HSM, vault, or ephemeral env injection. Restrict file permissions on key files (`chmod 600` on Unix, ACL lockdown on Windows). PQ verification remains off-chain: configuration does not change that split. `Veya.sol` stores hashes and signature bytes; auditors verify ML-DSA using `@veya/sdk/pq`.
+Load secrets from HSM, vault, or ephemeral env injection. Restrict file permissions on key files (`chmod 600` on Unix, ACL lockdown on Windows). PQ verification remains off-chain: configuration does not change that split. `Veya.sol` stores hashes and signature bytes; auditors verify ML-DSA using `@veyanet/sdk/pq`.
 
 The JSON-RPC endpoint is a trust boundary. A malicious RPC can lie about receipts, gas, and logs. It cannot change `eth_chainId` without failing `ensureRobinhoodChain` if the operator configured the expected id, but it can still withhold transactions. Use an RPC the operator controls or a provider with a documented SLA.
 
@@ -595,7 +595,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veya/sdk` version `1.0.0` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
+`@veyanet/sdk` version `1.0.0` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case leftovers from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
@@ -621,7 +621,7 @@ Environment variable names listed in this document are the compatibility surface
 ### Diagnostic script
 
 ```typescript
-import { resolveConfig, ROBINHOOD_TESTNET, isRobinhoodTestnet } from "@veya/sdk";
+import { resolveConfig, ROBINHOOD_TESTNET, isRobinhoodTestnet } from "@veyanet/sdk";
 
 const cfg = resolveConfig();
 console.table({

@@ -3,7 +3,7 @@
 
   # Off-Chain PQ Verification
 
-  **Cryptographic assurance for @veya/sdk attestations: ML-DSA-44 and BLAKE3-256, verified off-chain; immutable evidence on Robinhood Chain.**
+  **Cryptographic assurance for @veyanet/sdk attestations: ML-DSA-44 and BLAKE3-256, verified off-chain; immutable evidence on Robinhood Chain.**
 
   [![Chain ID](https://img.shields.io/badge/Chain%20ID-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
   [![Veya.sol](https://img.shields.io/badge/Veya.sol-protocol-green?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84)
@@ -16,7 +16,7 @@
 
 `Veya.sol` stores ML-DSA signature bytes and BLAKE3 hashes on Robinhood Chain but **does not verify lattice signatures inside the EVM**. Gas cost cannot run Dilithium at production throughput. This document defines verification workflows for operators, auditors, and integrators who must trust anchored attestations without treating `https://api.veyanet.tech` as an oracle.
 
-The SDK (`@veya/sdk`) is the verifier. The hosted API uses the same library. You can complete every procedure below with ethers v6, `@veya/sdk/pq`, RPC `https://rpc.testnet.chain.robinhood.com`, and a copy of the agent’s ML-DSA public key.
+The SDK (`@veyanet/sdk`) is the verifier. The hosted API uses the same library. You can complete every procedure below with ethers v6, `@veyanet/sdk/pq`, RPC `https://rpc.testnet.chain.robinhood.com`, and a copy of the agent’s ML-DSA public key.
 
 | Principle | Implementation |
 |-----------|----------------|
@@ -69,7 +69,7 @@ The SDK (`@veya/sdk`) is the verifier. The hosted API uses the same library. You
 On-chain storage provides **immutable evidence**. Off-chain verification provides **cryptographic assurance**. Splitting these concerns delivers:
 
 - Permanent audit records resistant to harvest-now-decrypt-later adversaries
-- Native-speed ML-DSA verification in TypeScript (`@noble/post-quantum` via `@veya/sdk`)
+- Native-speed ML-DSA verification in TypeScript (`@noble/post-quantum` via `@veyanet/sdk`)
 - Independent re-verification decades after anchoring: even if secp256k1 is broken for agent-identity purposes
 
 A verifier with Robinhood Chain RPC access, the agent’s ML-DSA public key, and either an `Attestation` mapping row or a `CommitmentStored` event can validate an attestation **without trusting VEYA hosted infrastructure**.
@@ -123,7 +123,7 @@ End-to-end auditor path from explorer hash to cryptographic accept:
 sequenceDiagram
     participant Aud as Auditor
     participant RPC as Robinhood RPC
-    participant PQ as @veya/sdk pq
+    participant PQ as @veyanet/sdk pq
     participant Vault as Secure pubkey vault
 
     Aud->>RPC: getTransactionReceipt txHash
@@ -194,7 +194,7 @@ Use this checklist for each attestation under review.
 
 - [ ] Extract 32-byte `blake3Hash` (not hex string) as the ML-DSA message
 - [ ] Load detached `mldsaSig` bytes from the attestation mapping when present
-- [ ] Run `verifyPQ` from `@veya/sdk/pq`
+- [ ] Run `verifyPQ` from `@veyanet/sdk/pq`
 - [ ] Confirm algorithm is ML-DSA-44 only
 - [ ] If the hosted relayer used `storeCommitment` without sig bytes, skip this phase and rely on identity + digest + quorum
 
@@ -212,7 +212,7 @@ Use this checklist for each attestation under review.
 
 ### Phase 6 | Sign-off
 
-- [ ] Document verifier identity, timestamp, `@veya/sdk` version, `@noble/post-quantum` version
+- [ ] Document verifier identity, timestamp, `@veyanet/sdk` version, `@noble/post-quantum` version
 - [ ] Store pass/fail in retention system (regulated treasuries typically keep ≥ 7 years)
 
 ---
@@ -227,7 +227,7 @@ import {
   ROBINHOOD_TESTNET,
   VEYA_CONTRACT_ADDRESS,
   isRobinhoodTestnet,
-} from "@veya/sdk";
+} from "@veyanet/sdk";
 
 const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
 const network = await provider.getNetwork();
@@ -276,8 +276,8 @@ assert computed == on_chain_hash
 ### TypeScript
 
 ```typescript
-import { publicKeyHashBlake3 } from "@veya/sdk/pq";
-import { EvmAnchor } from "@veya/sdk";
+import { publicKeyHashBlake3 } from "@veyanet/sdk/pq";
+import { EvmAnchor } from "@veyanet/sdk";
 
 const hash = await publicKeyHashBlake3(publicKey);
 const env = await evm.getEnvironment(environmentUuid);
@@ -327,7 +327,7 @@ Guest proofs in the hosted product may use SHA-256 for **browser-previewable** c
 ### TypeScript
 
 ```typescript
-import { verifyPQ, hashBlake3Bytes } from "@veya/sdk/pq";
+import { verifyPQ, hashBlake3Bytes } from "@veyanet/sdk/pq";
 
 const ok = await verifyPQ(signatureBytes, hashBytes, publicKey);
 if (!ok) throw new Error("ML-DSA verification failed");
@@ -477,7 +477,7 @@ Do not call a second RPC “because the first one failed verify.” If verify fa
 ### Full attestation verify
 
 ```typescript
-import { verifyPQ, publicKeyHashBlake3 } from "@veya/sdk/pq";
+import { verifyPQ, publicKeyHashBlake3 } from "@veyanet/sdk/pq";
 
 async function verifyAttestation(opts: {
   signature: Uint8Array;
@@ -498,7 +498,7 @@ async function verifyAttestation(opts: {
 ### Consensus plus chain
 
 ```typescript
-import { runConsensus, pq } from "@veya/sdk";
+import { runConsensus, pq } from "@veyanet/sdk";
 
 const consensus = await runConsensus(
   ["http://127.0.0.1:7701", "http://127.0.0.1:7702", "http://127.0.0.1:7703"],
@@ -522,7 +522,7 @@ Wire `local` to the on-chain `bytes32` (with or without `0x`) after the receipt 
 
 ```typescript
 import { ethers } from "ethers";
-import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS, explorerTxUrl } from "@veya/sdk";
+import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS, explorerTxUrl } from "@veyanet/sdk";
 
 const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
 const contract = new ethers.Contract(VEYA_CONTRACT_ADDRESS, VEYA_ABI, provider);
@@ -573,7 +573,7 @@ const row = await contract.attestations(attestKey);
 | Full mapping snapshots (`eth_call` JSON) | ≥ 7 years for regulated treasuries |
 | ML-DSA public keys per agent version | Until rotation + grace period |
 | Consensus `NodeResult` JSON | Match attestation retention |
-| Verifier tool versions (`@veya/sdk`, `@noble/post-quantum`, `hash-wasm`) | Per audit cycle |
+| Verifier tool versions (`@veyanet/sdk`, `@noble/post-quantum`, `hash-wasm`) | Per audit cycle |
 | RPC `eth_chainId` observation | Per audit cycle |
 
 Chain records alone are **insufficient** without off-chain pubkeys. A perfect `bytes32` with a lost public key is an opaque pebble.
@@ -682,7 +682,7 @@ That means the hosted wallet paid gas. Agent identity is still the ML-DSA finger
 
 <div align="center">
 
-**@veya/sdk Verification**: Off-chain ML-DSA. On-chain hashes. Robinhood Chain ID 46630. Hosted API optional.
+**@veyanet/sdk Verification**: Off-chain ML-DSA. On-chain hashes. Robinhood Chain ID 46630. Hosted API optional.
 
 [Architecture](./ARCHITECTURE.md) • [Post-Quantum](./POST_QUANTUM.md) • [Quickstart](./QUICKSTART.md)
 

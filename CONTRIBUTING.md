@@ -1,6 +1,6 @@
 <div align="center">
 
-  # Contributing to @veya/sdk
+  # Contributing to @veyanet/sdk
 
   **Robinhood Chain TypeScript SDK: PQ identity, sealed execution, Veya.sol.**
 

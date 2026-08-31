@@ -15,7 +15,7 @@
 | **Token interface** | None: **not ERC-20** |
 | **PQ verify** | Off-chain only (chain stores audit artifacts) |
 
-The contract anchors **BLAKE3-256** execution commitments and **ML-DSA-44** signature bytes for permanent audit. EVM gas cannot verify Dilithium at production throughput; auditors use `pq.verifyPQ` in `@veya/sdk`. Storage is **mappings keyed by uuid or keccak256**, not program-derived addresses.
+The contract anchors **BLAKE3-256** execution commitments and **ML-DSA-44** signature bytes for permanent audit. EVM gas cannot verify Dilithium at production throughput; auditors use `pq.verifyPQ` in `@veyanet/sdk`. Storage is **mappings keyed by uuid or keccak256**, not program-derived addresses.
 
 **Related:** [storage-layouts.md](./storage-layouts.md) • [types-reference.md](../api/types-reference.md) • [DEPLOYMENT.md](../DEPLOYMENT.md)
 
@@ -112,7 +112,7 @@ These are `public constant` and readable via ethers as view calls. They occupy n
 | 9 | `flagMemoryNullifier` | `nullifiers` | yes (memoryId) |
 | 10 | `storeSealedState` | `sealedStates` | upsert chunk (keccak key) |
 
-`INSTRUCTION_NAMES` in `@veya/sdk` is this list in camelCase. `EvmAnchor` methods share the same names.
+`INSTRUCTION_NAMES` in `@veyanet/sdk` is this list in camelCase. `EvmAnchor` methods share the same names.
 
 ---
 
@@ -185,7 +185,7 @@ Any `msg.sender`. Becomes `environments[uuid].owner`. Duplicate uuid reverts `En
 #### SDK
 
 ```typescript
-import { EvmAnchor } from "@veya/sdk";
+import { EvmAnchor } from "@veyanet/sdk";
 import { randomBytes } from "node:crypto";
 
 const evm = new EvmAnchor({ payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY! });
@@ -292,7 +292,7 @@ Stores `authority = msg.sender`, `timestamp = block.timestamp`, full `mldsaSig` 
 #### Off-chain verify
 
 ```typescript
-import { pq } from "@veya/sdk";
+import { pq } from "@veyanet/sdk";
 
 const ok = await pq.verifyPQ(sigBytes, blake3HashBytes, publicKey);
 ```

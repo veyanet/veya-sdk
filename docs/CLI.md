@@ -1,14 +1,14 @@
-# Operator Surface | Node and `@veya/sdk`
+# Operator Surface | Node and `@veyanet/sdk`
 
 **Post-quantum operator interface for the VEYA TypeScript SDK on Robinhood Chain.**
 
-This package (`@veya/sdk`, path `@veya/sdk`) is a **TypeScript library**, not a Rust CLI. Operators drive it from Node: `npm test`, `examples/quickstart.ts`, `scripts/doctor.ts`, `scripts/live-rpc.ts`, and small `tsx` programs that construct `VeyaClient` / `EvmAnchor`. JSON-RPC settlement is **Veya.sol** on chain id **46630**. Local consensus uses validator HTTP on ports **7701–7703**. Sealed execution uses port **7800**.
+This package (`@veyanet/sdk`, path `@veyanet/sdk`) is a **TypeScript library**, not a Rust CLI. Operators drive it from Node: `npm test`, `examples/quickstart.ts`, `scripts/doctor.ts`, `scripts/live-rpc.ts`, and small `tsx` programs that construct `VeyaClient` / `EvmAnchor`. JSON-RPC settlement is **Veya.sol** on chain id **46630**. Local consensus uses validator HTTP on ports **7701–7703**. Sealed execution uses port **7800**.
 
 The optional binary `veya` (`veya-cli`) lives in **`cli`**. Use it if you want SQLite-backed `veya env create` from a Rust install. It is **not** shipped in this npm package. HTTP contracts (`POST /execute`, `POST /protected`) match, so Node `runConsensus` / `protectedExec` are the SDK equivalents of those CLI subcommands.
 
 | Field | Value |
 |-------|-------|
-| **Package** | `@veya/sdk` |
+| **Package** | `@veyanet/sdk` |
 | **Version** | 1.0.0 |
 | **Runtime** | Node.js 20+ |
 | **Crypto** | ML-DSA-44, Kyber-768, BLAKE3-256 |
@@ -54,7 +54,7 @@ npm test
 npm run build
 ```
 
-The hosted API consumes the package as `"@veya/sdk": "^1.0.0"`. After `npm run build`, `dist/` is what Node resolves.
+The hosted API consumes the package as `"@veyanet/sdk": "^1.0.0"`. After `npm run build`, `dist/` is what Node resolves.
 
 ### Run examples without a global install
 
@@ -77,11 +77,11 @@ import {
   runConsensus,
   protectedExec,
   pq,
-} from "@veya/sdk";
+} from "@veyanet/sdk";
 ```
 
 ```ts
-import * as pq from "@veya/sdk/pq";
+import * as pq from "@veyanet/sdk/pq";
 ```
 
 ---
@@ -100,7 +100,7 @@ import * as pq from "@veya/sdk/pq";
 
 ```mermaid
 flowchart LR
-    subgraph Node["@veya/sdk"]
+    subgraph Node["@veyanet/sdk"]
         QS["examples/quickstart.ts"]
         DOC["scripts/doctor.ts"]
         LIVE["scripts/live-rpc.ts"]
@@ -139,7 +139,7 @@ flowchart LR
 ## Command Tree
 
 ```
-@veya/sdk
+@veyanet/sdk
 ├── npm test              vitest: PQ + chain constants + ABI camelCase
 ├── npm run build         tsup ESM + CJS + dts
 ├── npm run lint          tsc --noEmit
@@ -363,7 +363,7 @@ The primary “CLI” is a few lines of TypeScript.
 ### Hash only
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient();
 const digest = await client.hashBlake3("treasury vote");
@@ -403,7 +403,7 @@ npx tsx path/to/operator-script.ts
 ## Consensus from Node
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: [
@@ -452,7 +452,7 @@ Equivalent Rust CLI (external package): `veya consensus run --task-id ... --payl
 
 ```typescript
 import { randomBytes } from "node:crypto";
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   sealedNodeUrl: "http://127.0.0.1:7800",
@@ -490,7 +490,7 @@ Requires a payer key and `ciphertextChunk.length ≤ 8192`.
 All writes: `EvmAnchor` methods matching `InstructionName` camelCase. See [veya-contract.md](./programs/veya-contract.md).
 
 ```typescript
-import { EvmAnchor, pq } from "@veya/sdk";
+import { EvmAnchor, pq } from "@veyanet/sdk";
 import { randomBytes } from "node:crypto";
 
 const evm = new EvmAnchor({
@@ -629,9 +629,9 @@ Do not echo `$env:VEYA_DEPLOYER_PRIVATE_KEY`.
 
 ## Relationship to veya-cli
 
-| Task | This package (`@veya/sdk`) | `cli` |
+| Task | This package (`@veyanet/sdk`) | `cli` |
 |------|----------------------------|-------------------------------------|
-| Install | `npm install` in `@veya/sdk` | `cargo install --path clients/cli` |
+| Install | `npm install` in `@veyanet/sdk` | `cargo install --path clients/cli` |
 | Binary | none (`tsx` / `node`) | `veya` |
 | Local env rows | JSON memory + chain mappings | SQLite `~/.veya/veya.db` |
 | Consensus | `runConsensus` | `veya consensus run` |

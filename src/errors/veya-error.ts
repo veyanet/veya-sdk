@@ -1,5 +1,5 @@
 /**
- * Typed failures for @veya/sdk.
+ * Typed failures for @veyanet/sdk.
  *
  * Callers should branch on `code` rather than substring-matching Error.message.
  * Ethers custom errors from Veya.sol are mapped in `fromAnchorRevert` using

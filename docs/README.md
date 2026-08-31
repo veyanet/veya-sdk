@@ -6,7 +6,7 @@
   **Bounded autonomous systems on Robinhood Chain: post-quantum identity, sealed execution, and Veya.sol settlement.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../README.md)
-  [![npm](https://img.shields.io/badge/@veya/sdk-1.0.0-cb3837?style=flat-edge)](../package.json)
+  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.0.0-cb3837?style=flat-edge)](../package.json)
   [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green?style=flat-edge)](../package.json)
   [![ethers](https://img.shields.io/badge/ethers-v6-3c3c3d?style=flat-edge)](../package.json)
   [![Testnet](https://img.shields.io/badge/Robinhood%20Chain-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
@@ -19,11 +19,11 @@
 
 ## 💡 Information: What This Documentation Covers
 
-The `docs/` tree is the authoritative reference for **`@veya/sdk`**: the TypeScript SDK that integrators and the hosted Robinhood API (`https://api.veyanet.tech`) import in-process. The package provides ML-DSA-44 identity, Kyber-768 session transport, BLAKE3-256 commitments, 2-of-3 validator consensus, sealed-node protected execution, and **ethers v6** writes against **Veya.sol** on **Robinhood Chain**.
+The `docs/` tree is the authoritative reference for **`@veyanet/sdk`**: the TypeScript SDK that integrators and the hosted Robinhood API (`https://api.veyanet.tech`) import in-process. The package provides ML-DSA-44 identity, Kyber-768 session transport, BLAKE3-256 commitments, 2-of-3 validator consensus, sealed-node protected execution, and **ethers v6** writes against **Veya.sol** on **Robinhood Chain**.
 
 This is not a Solana SDK. Settlement is EVM. There is no program ID, no PDA derivation as the product surface, and no SPL Memo companion as the settlement path. `Veya.sol` is a **protocol contract** (environments, agents, attestations, commitments, spending caps, tool policies, memory nullifiers, sealed-state chunks). It is **not** an ERC-20 and it is not a token mint.
 
-No hosted VEYA coordination API is required to use the primitives documented here. Operators run Node scripts against local validator nodes (ports 7701–7703), a sealed node (port 7800), and the public Robinhood Chain testnet JSON-RPC. The optional Rust operator binary `veya-cli` lives in `cli`; this documentation set is about driving `@veya/sdk` from Node.
+No hosted VEYA coordination API is required to use the primitives documented here. Operators run Node scripts against local validator nodes (ports 7701–7703), a sealed node (port 7800), and the public Robinhood Chain testnet JSON-RPC. The optional Rust operator binary `veya-cli` lives in `cli`; this documentation set is about driving `@veyanet/sdk` from Node.
 
 ### Live Robinhood Chain testnet status
 
@@ -170,7 +170,7 @@ flowchart LR
     A5 --> A6[DEPLOYMENT.md]
 ```
 
-**Goal:** Install `@veya/sdk`, hash with BLAKE3, optionally write to Robinhood Chain testnet with a funded payer key, run consensus against local validators.
+**Goal:** Install `@veyanet/sdk`, hash with BLAKE3, optionally write to Robinhood Chain testnet with a funded payer key, run consensus against local validators.
 
 ### Path B | Smart contract auditor
 
@@ -212,7 +212,7 @@ flowchart LR
     E2 --> E3[DEPLOYMENT.md]
 ```
 
-**Goal:** Applications consume this package via `@veya/sdk`. Keep ABI, chain constants, and env vars in lockstep.
+**Goal:** Applications consume this package via `@veyanet/sdk`. Keep ABI, chain constants, and env vars in lockstep.
 
 ---
 
@@ -242,7 +242,7 @@ flowchart LR
 │   ├── doctor.ts         # Operator connectivity / config check
 │   └── live-rpc.ts       # Live JSON-RPC probe against testnet
 ├── docs/                 # You are here
-├── package.json          # name: @veya/sdk
+├── package.json          # name: @veyanet/sdk
 └── README.md             # Package intro
 ```
 
@@ -254,7 +254,7 @@ Related trees outside this package:
 | `robinhood/deployments/testnet.json` | Live address, deployer, timestamp |
 | `robinhood/fixtures/testnet-proofs.json` | Known testnet receipt hashes |
 | `cli` | Optional Rust `veya-cli` (not this package) |
-| `https://api.veyanet.tech` | Hosted API that imports `@veya/sdk` |
+| `https://api.veyanet.tech` | Hosted API that imports `@veyanet/sdk` |
 | `robinhood/utility` | Dashboard; talks HTTP to the API, not to this package directly |
 
 ---
@@ -318,7 +318,7 @@ flowchart TB
         OC6["Sealed ciphertext chunks up to 8192 B"]
     end
 
-    subgraph OffChain["Off-Chain (Node / @veya/sdk)"]
+    subgraph OffChain["Off-Chain (Node / @veyanet/sdk)"]
         OF1["ML-DSA sign and verify"]
         OF2["Kyber encapsulate / decapsulate"]
         OF3["BLAKE3 hash and compare"]
@@ -545,7 +545,7 @@ Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` me
 
 <div align="center">
 
-**@veya/sdk documentation v1.0.0**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
+**@veyanet/sdk documentation v1.0.0**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
 
 [Deployment](./DEPLOYMENT.md) • [Types](./api/types-reference.md) • [Veya.sol](./programs/veya-contract.md) • [Operator surface](./CLI.md)
 

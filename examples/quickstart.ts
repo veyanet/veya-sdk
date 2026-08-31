@@ -1,7 +1,7 @@
 /**
  * Minimal SDK usage — hash locally, then (optionally) submit to Robinhood Chain.
  *
- *   cd @veya/sdk && npm install && npx tsx examples/quickstart.ts
+ *   cd @veyanet/sdk && npm install && npx tsx examples/quickstart.ts
  *
  * On-chain writes need VEYA_DEPLOYER_PRIVATE_KEY in the environment and a
  * funded testnet wallet. Without a key this script only hashes and prints

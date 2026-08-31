@@ -1,7 +1,7 @@
 /**
  * Veya.sol ABI as compiled for Robinhood Chain.
  *
- * Inlined here so @veya/sdk does not depend on the Anchor monorepo's
+ * Inlined here so @veyanet/sdk does not depend on the Anchor monorepo's
  * @veya/program package. Keep this file in lockstep with
  * robinhood/contracts/Veya.sol.
  */

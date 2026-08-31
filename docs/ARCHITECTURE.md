@@ -7,7 +7,7 @@
 
   [![Robinhood Testnet](https://img.shields.io/badge/Testnet-Chain%20ID%2046630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84)
   [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
-  [![@veya/sdk](https://img.shields.io/badge/%40veya%2Fsdk-1.0.0-green?style=flat-edge)](../README.md)
+  [![@veyanet/sdk](https://img.shields.io/badge/%40veya%2Fsdk-1.0.0-green?style=flat-edge)](../README.md)
 
   **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
@@ -15,9 +15,9 @@
 
 ---
 
-This document describes the end-to-end architecture of `@veya/sdk` (this package, at `@veya/sdk`): **bounded multi-agent coordination** (scoped environments, MCP routing, sealed execution, validator consensus) anchored on **Robinhood Chain** with a **post-quantum security layer** (ML-DSA-44, Kyber-768, BLAKE3-256). The design prioritizes **environment isolation**, **decentralized consensus among operator-run nodes**, **optional hosted API**, and harvest-attack-resistant attestations.
+This document describes the end-to-end architecture of `@veyanet/sdk` (this package, at `@veyanet/sdk`): **bounded multi-agent coordination** (scoped environments, MCP routing, sealed execution, validator consensus) anchored on **Robinhood Chain** with a **post-quantum security layer** (ML-DSA-44, Kyber-768, BLAKE3-256). The design prioritizes **environment isolation**, **decentralized consensus among operator-run nodes**, **optional hosted API**, and harvest-attack-resistant attestations.
 
-The hosted HTTP API at `https://api.veyanet.tech` **imports this SDK**. The SDK itself talks to Robinhood Chain JSON-RPC and to local validator / sealed-node processes. It does not require the API. Integrators who want crypto and settlement in-process use `@veya/sdk` directly.
+The hosted HTTP API at `https://api.veyanet.tech` **imports this SDK**. The SDK itself talks to Robinhood Chain JSON-RPC and to local validator / sealed-node processes. It does not require the API. Integrators who want crypto and settlement in-process use `@veyanet/sdk` directly.
 
 `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` is a **protocol contract**. It is not an ERC-20, not a token mint, and not a brokerage wrapper. There is no token address in this product.
 
@@ -55,7 +55,7 @@ The hosted HTTP API at `https://api.veyanet.tech` **imports this SDK**. The SDK 
 
 ## Executive Summary
 
-`@veya/sdk` provides three coordinated capabilities that together replace a single trusted coordination server as the source of truth for agent settlement:
+`@veyanet/sdk` provides three coordinated capabilities that together replace a single trusted coordination server as the source of truth for agent settlement:
 
 1. **On-chain anchoring**: `Veya.sol` on Robinhood Chain stores environment identity fingerprints, BLAKE3 execution commitments, ML-DSA signature metadata, spending limits (wei), tool policies, memory nullifiers, and sealed ciphertext chunks across **10 Solidity functions** and **9 storage record types**.
 
@@ -75,7 +75,7 @@ flowchart LR
     A --> D["Immutable BLAKE3 + ML-DSA audit trail"]
     B --> D
     C --> D
-    D --> E["Off-Chain PQ Verification\n@veya/sdk pq module"]
+    D --> E["Off-Chain PQ Verification\n@veyanet/sdk pq module"]
 ```
 
 The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM). There is no Solana client in this package, no program-derived addresses, and no SPL Memo companion path.
@@ -176,7 +176,7 @@ Agents operate inside **typed environments** (`Execution` = 0, `SecureEnclave` =
 ### 4. Hosted API is optional
 
 ```
-Operator ──► @veya/sdk (VeyaClient / EvmAnchor)
+Operator ──► @veyanet/sdk (VeyaClient / EvmAnchor)
                 │
     ┌───────────┼───────────┬──────────────────┐
     ▼           ▼           ▼                  ▼
@@ -198,7 +198,7 @@ Data does not have to flow through `https://api.veyanet.tech`. Validators agree 
                                   |
 +---------------------------------v---------------------------------------+
 |                         Integration Layer                               |
-|   @veya/sdk (VeyaClient)  |  https://api.veyanet.tech (optional HTTP API)     |
+|   @veyanet/sdk (VeyaClient)  |  https://api.veyanet.tech (optional HTTP API)     |
 +----------+--------------------------+------------------+----------------+
            |                          |                  |
 +----------v----------+  +------------v------------+  +--v----------------+
@@ -229,7 +229,7 @@ flowchart TB
         Dash["robinhood/utility"]
     end
     subgraph L4["L4: Integration"]
-        SDK["@veya/sdk"]
+        SDK["@veyanet/sdk"]
         API["https://api.veyanet.tech optional"]
     end
     subgraph L3["L3: Compute and Crypto"]
@@ -360,7 +360,7 @@ These processes are not bundled inside the npm tarball. The SDK is the client. O
 
 The contract is a single deployable unit. Design constraints:
 
-- **No EVM PQ verify**: `attestExecution` stores `mldsaSig` up to `MAX_MLDSA_SIG_LEN` (4,627 bytes) without cryptographic validation inside Solidity. Verification is the auditor's job using `@veya/sdk` `verifyPQ`.
+- **No EVM PQ verify**: `attestExecution` stores `mldsaSig` up to `MAX_MLDSA_SIG_LEN` (4,627 bytes) without cryptographic validation inside Solidity. Verification is the auditor's job using `@veyanet/sdk` `verifyPQ`.
 - **Mapping keys, not PDAs**: Records are keyed by `bytes16` UUIDs, `bytes32` hashes, or `keccak256(abi.encodePacked(...))`. There is no program-derived address scheme.
 - **Chunk bounds**: `storeSealedState` rejects chunks larger than `MAX_SEALED_CHUNK` (8,192 bytes).
 - **Owner-scoped isolation**: Environment owner is `msg.sender` at `registerEnvironment`. Agent registration, spending-limit init, and tool policy require that owner.
@@ -433,7 +433,7 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
-The API depends on `"@veya/sdk": "^1.0.0"`. It uses the SDK for Veilnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+The API depends on `"@veyanet/sdk": "^1.0.0"`. It uses the SDK for Veilnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
 
 ---
 
@@ -744,7 +744,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     Dash["robinhood/utility"] --> API["https://api.veyanet.tech"]
-    API --> SDK["@veya/sdk"]
+    API --> SDK["@veyanet/sdk"]
     Integrator["Integrator process"] --> SDK
     SDK --> RPC["rpc.testnet.chain.robinhood.com"]
     SDK --> Nodes["7701-7703 and 7800"]
@@ -770,7 +770,7 @@ Both paths share one ABI, one chain id, and one commitment primitive.
 ```mermaid
 flowchart TB
     subgraph Trusted["Operator-Controlled"]
-        SDK["@veya/sdk"]
+        SDK["@veyanet/sdk"]
         Store["~/.veya"]
         Nodes["validator + sealed nodes"]
     end
@@ -867,7 +867,7 @@ console.log(result.explorer.environment, result.explorer.memo);
 
 ### Hosted API pattern
 
-`https://api.veyanet.tech` sets `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL`, imports `@veya/sdk`, and relays `storeCommitment` when a room has a 16-byte environment id. Guest JWT cannot create environments or drive the relayer. Direct SDK users skip this pattern.
+`https://api.veyanet.tech` sets `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL`, imports `@veyanet/sdk`, and relays `storeCommitment` when a room has a 16-byte environment id. Guest JWT cannot create environments or drive the relayer. Direct SDK users skip this pattern.
 
 ---
 
@@ -968,7 +968,7 @@ Do not invent a token address, a second protocol contract, or a Solana companion
 
 ## Invariants
 
-The following statements are true of a correctly configured `@veya/sdk` deployment. An auditor who finds a counterexample should reject the deployment, not patch the docs.
+The following statements are true of a correctly configured `@veyanet/sdk` deployment. An auditor who finds a counterexample should reject the deployment, not patch the docs.
 
 1. **Chain identity.** Every successful `EvmAnchor` write was preceded by `eth_chainId == 46630` (or the explicitly configured `chainId`).
 2. **Contract identity.** Every settlement receipt’s `to` field is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. A transfer of ETH to another address is not a VEYA proof.

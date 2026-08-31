@@ -1,10 +1,10 @@
 # Types Reference
 
-**Complete TypeScript type catalog for `@veya/sdk` on Robinhood Chain.**
+**Complete TypeScript type catalog for `@veyanet/sdk` on Robinhood Chain.**
 
 Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**: not Solana account layouts.
 
-Package: `@veya/sdk` at `@veya/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`.
+Package: `@veyanet/sdk` at `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`.
 
 **Related:** [../README.md](../README.md) • [veya-contract.md](../programs/veya-contract.md) • [storage-layouts.md](../programs/storage-layouts.md) • [DEPLOYMENT.md](../DEPLOYMENT.md)
 
@@ -27,7 +27,7 @@ Package: `@veya/sdk` at `@veya/sdk`. Client: ethers v6. Facade: `VeyaClient`. Wr
 13. [SpendingLimit](#spendinglimit)
 14. [PolicyAgent](#policyagent)
 15. [Coordination and Kyber](#coordination-and-kyber)
-16. [PQ module (`@veya/sdk/pq`)](#pq-module-veyasdkpq)
+16. [PQ module (`@veyanet/sdk/pq`)](#pq-module-veyasdkpq)
 17. [VeyaSdkError](#veyasdkerror)
 18. [Solidity struct mirrors](#solidity-struct-mirrors)
 19. [Explorer helpers](#explorer-helpers)
@@ -41,7 +41,7 @@ Package: `@veya/sdk` at `@veya/sdk`. Client: ethers v6. Facade: `VeyaClient`. Wr
 
 ```mermaid
 flowchart TB
-    subgraph TS["TypeScript @veya/sdk"]
+    subgraph TS["TypeScript @veyanet/sdk"]
         VCC["VeyaClientConfig"]
         NR["NodeResult"]
         MM["McpMessage"]
@@ -142,7 +142,7 @@ import {
   ROBINHOOD_TESTNET,
   ROBINHOOD_TESTNET_CHAIN_ID,
   isRobinhoodTestnet,
-} from "@veya/sdk";
+} from "@veyanet/sdk";
 
 isRobinhoodTestnet(46630); // true
 isRobinhoodTestnet(1n);    // false
@@ -365,7 +365,7 @@ declare const VEYA_BYTECODE: string;
 declare const VEYA_CONTRACT_ADDRESS: "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84";
 ```
 
-`VEYA_ABI` is the compiled JSON ABI inlined so `@veya/sdk` does not depend on `@veya/program`. Keep it in lockstep with `robinhood/contracts/Veya.sol`.
+`VEYA_ABI` is the compiled JSON ABI inlined so `@veyanet/sdk` does not depend on `@veya/program`. Keep it in lockstep with `robinhood/contracts/Veya.sol`.
 
 Public ABI surface includes:
 
@@ -623,9 +623,9 @@ In-process `setToolPolicy` is the SDK ACL. On-chain ACL is `defineToolPolicy` on
 
 ---
 
-## PQ module (`@veya/sdk/pq`)
+## PQ module (`@veyanet/sdk/pq`)
 
-Also re-exported as namespace `pq` from `@veya/sdk`.
+Also re-exported as namespace `pq` from `@veyanet/sdk`.
 
 | Function | Async | Output |
 |----------|-------|--------|

@@ -2,7 +2,7 @@
 
 **HTTP protected execution with AES-256-GCM encryption, BLAKE3 commitments, and ML-DSA attestations: optional data availability on `Veya.sol`.**
 
-The `sealed-node` binary receives execution requests from `@veya/sdk` (`protectedExec` / `VeyaClient.protectedExecute`) or other HTTP clients, processes payloads inside the sealed boundary, and returns ciphertext commitments suitable for `storeSealedState` on Robinhood Chain. Default listen port is **7800**. Settlement, when used, targets `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on chain id **46630**, with camelCase ABI methods and wei accounting elsewhere in the protocol.
+The `sealed-node` binary receives execution requests from `@veyanet/sdk` (`protectedExec` / `VeyaClient.protectedExecute`) or other HTTP clients, processes payloads inside the sealed boundary, and returns ciphertext commitments suitable for `storeSealedState` on Robinhood Chain. Default listen port is **7800**. Settlement, when used, targets `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on chain id **46630**, with camelCase ABI methods and wei accounting elsewhere in the protocol.
 
 **Related:** [sdk/sealed-execution.md](../sdk/sealed-execution.md) • [sdk/pq-crypto.md](../sdk/pq-crypto.md) • [sdk/evm-anchoring.md](../sdk/evm-anchoring.md) • [consensus-cluster.md](./consensus-cluster.md)
 
@@ -36,7 +36,7 @@ The `sealed-node` binary receives execution requests from `@veya/sdk` (`protecte
 
 This runbook covers operating a sealed node that the TypeScript SDK can call. It specifies bind addresses, the `/protected` contract, entropy requirements, how to persist ML-DSA identity, how to place TLS in front, and how ciphertext becomes `storeSealedState` chunks of at most 8192 bytes.
 
-The node is not an EVM client. It does not send transactions. Operators who want on-chain data availability use `@veya/sdk` `EvmAnchor` from a different host that holds `payerPrivateKey`.
+The node is not an EVM client. It does not send transactions. Operators who want on-chain data availability use `@veyanet/sdk` `EvmAnchor` from a different host that holds `payerPrivateKey`.
 
 ---
 
@@ -227,7 +227,7 @@ sequenceDiagram
 
 AES-256-GCM provides confidentiality and authenticity of the sealed blob given the key. The HTTP request that carries plaintext `payload_json` is outside that guarantee. TLS or loopback is mandatory for any non-trivial deployment.
 
-`verified: true` is a node-side flag. Auditors re-run `verifyPQ` from `@veya/sdk/pq`.
+`verified: true` is a node-side flag. Auditors re-run `verifyPQ` from `@veyanet/sdk/pq`.
 
 ---
 
@@ -362,7 +362,7 @@ A later confidential computing upgrade (for example stronger envelope schemes) m
 
 | Variable | Reader | Purpose |
 |----------|--------|---------|
-| `VEYA_SEALED_NODE_URL` | `@veya/sdk` | Origin, no trailing path |
+| `VEYA_SEALED_NODE_URL` | `@veyanet/sdk` | Origin, no trailing path |
 | `RUST_LOG` | Node | Log verbosity |
 | `ROBINHOOD_RPC_URL` | SDK only | Not for the node process |
 | `VEYA_DEPLOYER_PRIVATE_KEY` | SDK only | Never on the sealed host |

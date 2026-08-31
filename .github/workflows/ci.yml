@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: @veya/sdk
+        working-directory: @veyanet/sdk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

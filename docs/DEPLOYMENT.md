@@ -1,8 +1,8 @@
 # Deployment Guide
 
-**Deploy and operate `@veya/sdk` against Veya.sol on Robinhood Chain testnet, including validator and sealed-node clusters.**
+**Deploy and operate `@veyanet/sdk` against Veya.sol on Robinhood Chain testnet, including validator and sealed-node clusters.**
 
-VEYA on Robinhood Chain requires **no hosted API server**. Operators run Node (`@veya/sdk`), local memory at `~/.veya/agent-memory.json`, validator nodes (×3 quorum on ports 7701–7703), and a sealed-node process on port 7800. The protocol contract **Veya.sol** is already **deployed** on Robinhood Chain testnet. This guide covers using that deployment from the SDK, redeploying only when you intentionally replace the contract, and wiring the off-chain fleet.
+VEYA on Robinhood Chain requires **no hosted API server**. Operators run Node (`@veyanet/sdk`), local memory at `~/.veya/agent-memory.json`, validator nodes (×3 quorum on ports 7701–7703), and a sealed-node process on port 7800. The protocol contract **Veya.sol** is already **deployed** on Robinhood Chain testnet. This guide covers using that deployment from the SDK, redeploying only when you intentionally replace the contract, and wiring the off-chain fleet.
 
 `Veya.sol` is a **protocol contract**. It is **not** an ERC-20. Settlement is EVM transaction receipts, not program-derived accounts and not a memo program.
 
@@ -52,7 +52,7 @@ VEYA on Robinhood Chain requires **no hosted API server**. Operators run Node (`
 ```mermaid
 flowchart TB
     subgraph Operator["Operator workstation"]
-        SDK["@veya/sdk VeyaClient"]
+        SDK["@veyanet/sdk VeyaClient"]
         EX["examples/quickstart.ts"]
         DOC["scripts/doctor.ts"]
         LIVE["scripts/live-rpc.ts"]
@@ -235,7 +235,7 @@ This is the primary “deployment” path: **consume** the live address.
 ### Read-only (no key)
 
 ```typescript
-import { VeyaClient, ROBINHOOD_TESTNET, resolveConfig } from "@veya/sdk";
+import { VeyaClient, ROBINHOOD_TESTNET, resolveConfig } from "@veyanet/sdk";
 
 const client = new VeyaClient();
 const digest = await client.hashBlake3("operator smoke");
@@ -254,7 +254,7 @@ console.log({
 ### Write path (funded key)
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -279,7 +279,7 @@ Both transactions are ordinary EVM writes. Explorer URLs are built with `explore
 ### Direct `EvmAnchor` usage
 
 ```typescript
-import { EvmAnchor } from "@veya/sdk";
+import { EvmAnchor } from "@veyanet/sdk";
 import { randomBytes } from "node:crypto";
 
 const evm = new EvmAnchor({
@@ -307,7 +307,7 @@ Canonical Solidity: `robinhood/contracts/Veya.sol`.
 This package inlines the compiled ABI at `src/abi/Veya.json` and re-exports:
 
 ```typescript
-import { VEYA_ABI, VEYA_BYTECODE, VEYA_CONTRACT_ADDRESS } from "@veya/sdk";
+import { VEYA_ABI, VEYA_BYTECODE, VEYA_CONTRACT_ADDRESS } from "@veyanet/sdk";
 ```
 
 After a Solidity change:
@@ -323,7 +323,7 @@ After a Solidity change:
 
 ```typescript
 import { ContractFactory, JsonRpcProvider, Wallet } from "ethers";
-import { VEYA_ABI, VEYA_BYTECODE } from "@veya/sdk";
+import { VEYA_ABI, VEYA_BYTECODE } from "@veyanet/sdk";
 
 const provider = new JsonRpcProvider(process.env.ROBINHOOD_RPC_URL);
 const wallet = new Wallet(process.env.VEYA_DEPLOYER_PRIVATE_KEY!, provider);
@@ -395,7 +395,7 @@ Successful nodes return `{ "result": NodeResult }` where `NodeResult` includes `
 ### SDK call
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: [
@@ -450,7 +450,7 @@ export VEYA_SEALED_NODE_URL=http://127.0.0.1:7800
 
 ```typescript
 import { randomBytes } from "node:crypto";
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient();
 const sealed = await client.protectedExecute({
@@ -572,14 +572,14 @@ v1 has no transparent proxy. An “upgrade” is a **new deploy** plus address c
 1. Freeze writes on the old address at the application layer
 2. Deploy new bytecode
 3. Cut `VEYA_CONTRACT_ADDRESS` / `ROBINHOOD_TESTNET.contractAddress`
-4. Rebuild `@veya/sdk` and `https://api.veyanet.tech`
+4. Rebuild `@veyanet/sdk` and `https://api.veyanet.tech`
 5. Run `npm test` and `scripts/doctor.ts`
 
 State in mappings does not copy. Plan an application-level re-register of environments if you must move.
 
 ### SDK publish / consume
 
-This repo consumes the package as `@veya/sdk`. After source changes:
+This repo consumes the package as `@veyanet/sdk`. After source changes:
 
 ```bash
 npm install
@@ -638,7 +638,7 @@ Spending-limit **application** amounts (treasury caps) are independent of **gas*
 ### Pre-flight
 
 - [ ] `node --version` is 20+
-- [ ] `npm install` in `@veya/sdk`
+- [ ] `npm install` in `@veyanet/sdk`
 - [ ] `npm test` passes (chain id 46630, ABI camelCase, PQ round-trip)
 - [ ] `npm run build` succeeds
 - [ ] `VEYA_DEPLOYER_PRIVATE_KEY` is unset in git and set only in the operator shell if writes are planned

@@ -1,6 +1,6 @@
 # Robinhood Chain Testnet Pin & Network Configuration
 
-This document contains the low-level network details and contract specifications for `@veya/sdk` on **Robinhood Chain Testnet**.
+This document contains the low-level network details and contract specifications for `@veyanet/sdk` on **Robinhood Chain Testnet**.
 
 > [!NOTE]
 > `Veya.sol` is the protocol contract for environment records, commitments, spending limits, tool policies, and sealed execution state. It is **not** a token contract and does not implement ERC-20.
@@ -37,7 +37,7 @@ This document contains the low-level network details and contract specifications
 ## 💻 Code Usage
 
 ```ts
-import { ROBINHOOD_TESTNET, ROBINHOOD_TESTNET_CHAIN_ID, isRobinhoodTestnet } from "@veya/sdk";
+import { ROBINHOOD_TESTNET, ROBINHOOD_TESTNET_CHAIN_ID, isRobinhoodTestnet } from "@veyanet/sdk";
 
 console.log(ROBINHOOD_TESTNET.chainId); // 46630
 console.log(isRobinhoodTestnet(46630)); // true

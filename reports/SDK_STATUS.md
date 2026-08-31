@@ -1,6 +1,6 @@
 # SDK presence | 31 August 2026
 
-Package lives at `@veya/sdk`. Hosted API resolves `@veya/sdk` to `@veya/sdk`.
+Package lives at `@veyanet/sdk`. Hosted API resolves `@veyanet/sdk` to `@veyanet/sdk`.
 
 Live checks used after the tree expansion:
 

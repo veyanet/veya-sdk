@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `@veya/sdk` package will be documented in this file.
+All notable changes to the `@veyanet/sdk` package will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [1.0.0] — 2026-08-31
 
 ### Added
-- **Canonical Package Release**: Official `@veya/sdk` release for Robinhood Chain with hosted API (`https://api.veyanet.tech`).
+- **Canonical Package Release**: Official `@veyanet/sdk` release for Robinhood Chain with hosted API (`https://api.veyanet.tech`).
 - **Post-Quantum Cryptography Stack**: Integrated FIPS 204 ML-DSA-44 lattice signatures, FIPS 203 Kyber-768 key encapsulation, and BLAKE3-256 digesting.
 - **EVM Protocol Settlement (`Veya.sol`)**: Full `EvmAnchor` support for on-chain environment registration, commitments (`storeCommitment`), tool policies (`defineToolPolicy`), spending limits in **wei**, and memory nullifiers.
 - **Robinhood Chain Testnet Integration**: Direct JSON-RPC connection to Robinhood Chain (Chain ID `46630`) with automated `eth_chainId` validation via `ensureRobinhoodChain()`.
@@ -50,7 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [0.1.0] — 2026-05-31
 
 ### Added
-- **Initial Public Alpha** of `@veya/sdk`.
+- **Initial Public Alpha** of `@veyanet/sdk`.
 - `Veya` client instantiation with `apiUrl` and `apiKey` overrides.
 - **Agent Deployments**: `agents.deploy()` and `agents.deployEncrypted()` for deploying agents into isolated workspaces.
 - **Environments**: Full CRUD for workspaces including `spendingLimits` configuration.
