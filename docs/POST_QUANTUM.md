@@ -1,7 +1,7 @@
 <div align="center">
   <img src="../assets/logo.png" width="400" alt="VEYA Logo" />
 
-  # Post-Quantum Cryptography in @veya/sdk
+  # Post-Quantum Cryptography in @veyanet/sdk
 
   **ML-DSA-44 • Kyber-768 • BLAKE3-256: harvest-attack-resistant by design.**
 
@@ -15,7 +15,7 @@
 
 ---
 
-`@veya/sdk` is built **post-quantum first**. Every new code path in this package uses **ML-DSA-44** for signatures, **Kyber-768** for key encapsulation, and **BLAKE3-256** for commitments. Ethereum secp256k1 remains the chain’s transaction authorization (`msg.sender` on `Veya.sol`); it is not the agent identity algorithm.
+`@veyanet/sdk` is built **post-quantum first**. Every new code path in this package uses **ML-DSA-44** for signatures, **Kyber-768** for key encapsulation, and **BLAKE3-256** for commitments. Ethereum secp256k1 remains the chain’s transaction authorization (`msg.sender` on `Veya.sol`); it is not the agent identity algorithm.
 
 This guide explains how each primitive is used in the TypeScript SDK, where verification happens, byte-level sizes, NIST alignment, and how on-chain storage on Robinhood Chain relates to off-chain cryptographic assurance.
 
@@ -76,7 +76,7 @@ VEYA mitigates HNDL by:
 - Using **Kyber-768** for coordination session keys (never on-chain)
 - Keeping full public keys off-chain while storing **BLAKE3(pubkey)** fingerprints on-chain
 
-**Design rule:** SHA-256 is not used on new SDK commitment paths. BLAKE3 is the sole hash standard in `@veya/sdk`. keccak256 appears only as EVM mapping-key derivation (`abi.encodePacked`), which is addressing, not a VEYA commitment.
+**Design rule:** SHA-256 is not used on new SDK commitment paths. BLAKE3 is the sole hash standard in `@veyanet/sdk`. keccak256 appears only as EVM mapping-key derivation (`abi.encodePacked`), which is addressing, not a VEYA commitment.
 
 Ethereum ECDSA still pays gas. That is not a PQ identity. Mixing the two on purpose is the architecture: chain authorization versus agent authorization.
 
@@ -175,7 +175,7 @@ flowchart LR
 ### TypeScript API
 
 ```typescript
-import * as pq from "@veya/sdk/pq";
+import * as pq from "@veyanet/sdk/pq";
 
 const { publicKey, privateKey } = await pq.generatePQIdentity();
 const digest = await pq.hashBlake3Bytes(payloadBytes);
@@ -243,8 +243,8 @@ sequenceDiagram
 ### TypeScript API
 
 ```typescript
-import * as pq from "@veya/sdk/pq";
-import { establishKyberSession, getNodeKyberPublicKey } from "@veya/sdk";
+import * as pq from "@veyanet/sdk/pq";
+import { establishKyberSession, getNodeKyberPublicKey } from "@veyanet/sdk";
 
 const { publicKey, privateKey } = pq.generateKyberKeys();
 const { ciphertext, sharedSecret } = pq.encapsulateKyber(publicKey);
@@ -329,7 +329,7 @@ flowchart TB
 ### TypeScript
 
 ```typescript
-import { pq } from "@veya/sdk";
+import { pq } from "@veyanet/sdk";
 
 const hex = await pq.hashBlake3(payload);
 const bytes = await pq.hashBlake3Bytes(payload);
@@ -404,7 +404,7 @@ Never treat `receipt.from` as a substitute for `pqPubkeyHash`.
 |  No BLAKE3 opcode                                                |
 +------------------------------------------------------------------+
 +------------------------------------------------------------------+
-|                 OFF-CHAIN  @veya/sdk  pq/                        |
+|                 OFF-CHAIN  @veyanet/sdk  pq/                        |
 |  ML-DSA sign and verify                                          |
 |  Kyber encapsulate / decapsulate                                 |
 |  BLAKE3 hash and compare                                         |
@@ -449,7 +449,7 @@ Modules:
 | `src/pq/mldsa.ts` | `generatePQIdentity`, `signPQ`, `verifyPQ`, `publicKeyHashBlake3` |
 | `src/pq/kyber.ts` | `generateKyberKeys`, `encapsulateKyber`, `decapsulateKyber` |
 | `src/pq/blake3.ts` | `hashBlake3`, `hashBlake3Bytes` |
-| `src/pq/index.ts` | re-export; also `@veya/sdk/pq` subpath |
+| `src/pq/index.ts` | re-export; also `@veyanet/sdk/pq` subpath |
 
 Tests in `src/pq/pq.test.ts` round-trip sign/verify and hash stability. `src/chain.test.ts` pins network constants so a port cannot silently revert to another chain’s IDs.
 
@@ -555,7 +555,7 @@ The chain does not enforce domain labels. A 32-byte value is a 32-byte value. Op
 - Verify ML-DSA signature over the 32-byte execution hash before settlement
 - Cross-check attestation hash against consensus quorum when applicable
 - Rotate keys on agent compromise; nullify affected memory entries
-- Run `npm test` in `@veya/sdk` after dependency upgrades
+- Run `npm test` in `@veyanet/sdk` after dependency upgrades
 - Confirm live receipts on the Robinhood explorer (`to` must be Veya.sol)
 - Never introduce SHA-256 on new SDK commitment paths
 - Never document a token address
@@ -633,7 +633,7 @@ flowchart TD
 
 <div align="center">
 
-**@veya/sdk Cryptographic Profile**: Post-quantum first. BLAKE3 commitments. Robinhood Chain storage. Hosted API optional.
+**@veyanet/sdk Cryptographic Profile**: Post-quantum first. BLAKE3 commitments. Robinhood Chain storage. Hosted API optional.
 
 [Architecture](./ARCHITECTURE.md) • [Verification](./VERIFICATION.md) • [Quickstart](./QUICKSTART.md)
 

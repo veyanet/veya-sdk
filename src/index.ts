@@ -7,7 +7,7 @@
  * use Kyber-768 KEM.
  */
 
-export const SDK_NAME = "@veya/sdk";
+export const SDK_NAME = "@veyanet/sdk";
 export const SDK_VERSION = "1.0.0";
 
 /** What this package is, in one object operators can log from doctor scripts. */

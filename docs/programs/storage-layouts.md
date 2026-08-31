@@ -228,7 +228,7 @@ struct Agent {
 
 ### Role convention
 
-| `role` | Meaning in `@veya/sdk` |
+| `role` | Meaning in `@veyanet/sdk` |
 |--------|------------------------|
 | 0 | Coordinator |
 | 1 | Executor |
@@ -517,7 +517,7 @@ Fund the payer for several large `attestExecution` calls, not only tiny uuid wri
 ### Preferred: ABI getters
 
 ```typescript
-import { EvmAnchor } from "@veya/sdk";
+import { EvmAnchor } from "@veyanet/sdk";
 
 const evm = new EvmAnchor({ payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY! });
 const env = await evm.getEnvironment(envUuid);

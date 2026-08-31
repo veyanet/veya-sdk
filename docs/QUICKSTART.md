@@ -15,7 +15,7 @@
 
 ---
 
-Get `@veya/sdk` running locally, execute a full post-quantum workflow, and optionally anchor attestations to **live Robinhood Chain testnet**. This walkthrough does **not** require the hosted API at `https://api.veyanet.tech`. You need Node 20+, this package, and: for writes: a funded testnet wallet. Validator and sealed-node processes are local HTTP services the SDK calls; they are not a VEYA cloud.
+Get `@veyanet/sdk` running locally, execute a full post-quantum workflow, and optionally anchor attestations to **live Robinhood Chain testnet**. This walkthrough does **not** require the hosted API at `https://api.veyanet.tech`. You need Node 20+, this package, and: for writes: a funded testnet wallet. Validator and sealed-node processes are local HTTP services the SDK calls; they are not a VEYA cloud.
 
 `Veya.sol` is a protocol contract. It is not a token. Do not look for an ERC-20 address.
 
@@ -88,7 +88,7 @@ This compiles `src/` with tsup into ESM + CJS under `dist/`, including types.
 `https://api.veyanet.tech` already depends on the SDK as a file path:
 
 ```json
-"@veya/sdk": "^1.0.0"
+"@veyanet/sdk": "^1.0.0"
 ```
 
 ```ts
@@ -99,7 +99,7 @@ import {
   runConsensus,
   protectedExec,
   pq,
-} from "@veya/sdk";
+} from "@veyanet/sdk";
 ```
 
 ### Verify build artifacts
@@ -109,7 +109,7 @@ import {
 | ESM bundle | `dist/index.js` |
 | CJS bundle | `dist/index.cjs` |
 | Types | `dist/index.d.ts` |
-| PQ subpath | `dist/pq/index.js` (`@veya/sdk/pq`) |
+| PQ subpath | `dist/pq/index.js` (`@veyanet/sdk/pq`) |
 | Example | `examples/quickstart.ts` |
 
 Run the example (hash only, no wallet):
@@ -127,7 +127,7 @@ Expected shape: chain name, chain id `46630`, RPC, contract `0x1a1Dc3c55550FCE9F
 Local hashing needs no wallet:
 
 ```ts
-import { VeyaClient, ROBINHOOD_TESTNET, explorerTxUrl } from "@veya/sdk";
+import { VeyaClient, ROBINHOOD_TESTNET, explorerTxUrl } from "@veyanet/sdk";
 
 const client = new VeyaClient();
 const digest = await client.hashBlake3("treasury vote 31 Aug");
@@ -170,8 +170,8 @@ Without a private key, `client.evm` is undefined and `registerPqOnchain` throws 
 ## 3. Generate Post-Quantum Keys
 
 ```ts
-import { VeyaClient } from "@veya/sdk";
-import * as pq from "@veya/sdk/pq";
+import { VeyaClient } from "@veyanet/sdk";
+import * as pq from "@veyanet/sdk/pq";
 
 const client = new VeyaClient();
 const { publicKey, privateKey } = await client.pqKeygen();
@@ -198,7 +198,7 @@ Cryptographic details: [POST_QUANTUM.md](./POST_QUANTUM.md)
 ## 4. Hash a Commitment
 
 ```ts
-import { pq } from "@veya/sdk";
+import { pq } from "@veyanet/sdk";
 
 const hex = await pq.hashBlake3("veya-sdk-quickstart");
 const bytes = await pq.hashBlake3Bytes(new TextEncoder().encode("veya-sdk-quickstart"));
@@ -252,7 +252,7 @@ Override with `VEYA_VALIDATOR_NODES` as a comma-separated list.
 ## 6. Run Consensus
 
 ```ts
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: [
@@ -309,7 +309,7 @@ Ensure the sealed node from step 7 is running, then:
 
 ```ts
 import { randomBytes } from "node:crypto";
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   sealedNodeUrl: "http://127.0.0.1:7800",
@@ -353,7 +353,7 @@ Anchor the hash with `storeSealedState` or `storeCommitment` after you have a re
 | **Native currency** | ETH (18 decimals) |
 
 ```ts
-import { ROBINHOOD_TESTNET, ROBINHOOD_TESTNET_CHAIN_ID, VEYA_ABI } from "@veya/sdk";
+import { ROBINHOOD_TESTNET, ROBINHOOD_TESTNET_CHAIN_ID, VEYA_ABI } from "@veyanet/sdk";
 
 ROBINHOOD_TESTNET.chainId;         // 46630
 ROBINHOOD_TESTNET.contractAddress; // Veya.sol
@@ -383,7 +383,7 @@ MetaMask (or any wallet you use beside the SDK) must be on chain **46630**. A wr
 ## 10. Register an Environment On-Chain
 
 ```ts
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -419,7 +419,7 @@ Guest content-proof receipt (hosted API using this SDK): [0x4314faef…395d](htt
 
 ```ts
 import { randomBytes } from "node:crypto";
-import { VeyaClient, pq } from "@veya/sdk";
+import { VeyaClient, pq } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -471,7 +471,7 @@ After anchoring, verification is off-chain. The chain stores bytes; cryptographi
 
 ```ts
 import { ethers } from "ethers";
-import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS } from "@veya/sdk";
+import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS } from "@veyanet/sdk";
 
 const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
 const txHash = "0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d";
@@ -539,7 +539,7 @@ When you **do** run the API:
 3. Keep guest JWT off write routes (guest may verify proofs; guest may not drive `registerEnvironment`)
 4. Confirm receipts with `receipt.to === Veya.sol`, not merely `status === 1`
 
-The dashboard (`robinhood/utility`) talks HTTP to the API. Integrators who want crypto + chain in-process skip both and import `@veya/sdk`.
+The dashboard (`robinhood/utility`) talks HTTP to the API. Integrators who want crypto + chain in-process skip both and import `@veyanet/sdk`.
 
 If the API is down, this quickstart still works: you have Node, three validators, one sealed-node, and a payer key.
 
@@ -607,7 +607,7 @@ There is no Solana cluster variable, no program id, and no memo program id in th
 |-------|---------|-----|
 | Node too old | engine warning / ESM errors | Install Node 20+ |
 | SDK build fails | tsup / types | `rm -rf node_modules dist && npm install && npm run build` |
-| Example cannot import | path vs package name | Run from `@veya/sdk` with `npx tsx examples/quickstart.ts` |
+| Example cannot import | path vs package name | Run from `@veyanet/sdk` with `npx tsx examples/quickstart.ts` |
 
 ### Consensus
 
@@ -722,7 +722,7 @@ The contract is working. Look up `commitments[digest]`. The original `authority`
 
 <div align="center">
 
-**@veya/sdk Quickstart**: Post-quantum agent settlement on Robinhood Chain. Protocol contract, not a token. Hosted API optional.
+**@veyanet/sdk Quickstart**: Post-quantum agent settlement on Robinhood Chain. Protocol contract, not a token. Hosted API optional.
 
 [Architecture](./ARCHITECTURE.md) • [Post-Quantum](./POST_QUANTUM.md) • [Verification](./VERIFICATION.md)
 

@@ -41,7 +41,7 @@ The `EvmAnchor` class (`src/client/evm.ts`) submits real EVM transactions: envir
 
 ## Purpose and Scope
 
-This document is the operator and integrator reference for on-chain settlement through `@veya/sdk`. It covers every write method on `EvmAnchor`, the chain-id gate, wei-denominated spending, and the mapping from TypeScript calls to `Veya.sol` storage. It does not describe validator HTTP or sealed-node HTTP; those are off-chain and only become chain-visible when the operator later calls `attestExecution`, `anchorPqAttestation`, or `storeSealedState`.
+This document is the operator and integrator reference for on-chain settlement through `@veyanet/sdk`. It covers every write method on `EvmAnchor`, the chain-id gate, wei-denominated spending, and the mapping from TypeScript calls to `Veya.sol` storage. It does not describe validator HTTP or sealed-node HTTP; those are off-chain and only become chain-visible when the operator later calls `attestExecution`, `anchorPqAttestation`, or `storeSealedState`.
 
 The contract address on Robinhood Chain testnet is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. Explorers live at `https://explorer.testnet.chain.robinhood.com`. Chain id is `46630`. All of those values are defaults in `src/chain.ts` and are re-checked at write time.
 
@@ -131,7 +131,7 @@ flowchart TB
 ## Construction
 
 ```typescript
-import { EvmAnchor } from "@veya/sdk";
+import { EvmAnchor } from "@veyanet/sdk";
 
 const anchor = new EvmAnchor({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -145,7 +145,7 @@ const anchor = new EvmAnchor({
 `VeyaClient` instantiates `EvmAnchor` automatically when `payerPrivateKey` is provided:
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
@@ -573,7 +573,7 @@ Spending functions do not move ETH. An application that treats `recordSpend` as 
 End-to-end identity plus commitment on Robinhood Chain testnet:
 
 ```typescript
-import { VeyaClient, ROBINHOOD_TESTNET } from "@veya/sdk";
+import { VeyaClient, ROBINHOOD_TESTNET } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,

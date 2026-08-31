@@ -1,6 +1,6 @@
 # SDK Decentralized Compute
 
-**Multi-node BLAKE3 quorum with ML-DSA-44 attestations: `runConsensus()` in `@veya/sdk`.**
+**Multi-node BLAKE3 quorum with ML-DSA-44 attestations: `runConsensus()` in `@veyanet/sdk`.**
 
 The SDK orchestrates decentralized execution consensus via `src/compute/consensus.ts`. Three independent validator nodes execute identical payloads; **2-of-3** matching BLAKE3 digests constitute agreement. Agreed hashes can later be written to `Veya.sol` through `EvmAnchor.anchorPqAttestation` or `attestExecution` on Robinhood Chain (chain id 46630).
 
@@ -86,7 +86,7 @@ Assumptions:
 
 ```mermaid
 flowchart TB
-    subgraph SDK["@veya/sdk"]
+    subgraph SDK["@veyanet/sdk"]
         RC["runConsensus()"]
         EQ["Hash vote counting\nthreshold=2"]
     end
@@ -138,7 +138,7 @@ sequenceDiagram
 ## runConsensus API
 
 ```typescript
-import { runConsensus } from "@veya/sdk";
+import { runConsensus } from "@veyanet/sdk";
 
 const result = await runConsensus(
   [
@@ -245,7 +245,7 @@ Trailing slashes on base URLs produce `http://host:7701//execute` after concaten
 ## VeyaClient Integration
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: process.env.VEYA_VALIDATOR_NODES?.split(","),
@@ -320,7 +320,7 @@ Never write `recordSpend` before quorum if the environment has `requireConsensus
 After quorum, for each successful `NodeResult` whose hash equals `agreed_blake3_hash`:
 
 ```typescript
-import { verifyPQ } from "@veya/sdk/pq";
+import { verifyPQ } from "@veyanet/sdk/pq";
 
 const sig = Buffer.from(node.mldsa_signature, "hex");
 const pub = Buffer.from(node.mldsa_public_key_hex!, "hex");
@@ -383,8 +383,8 @@ Default if unset: three loopback ports 7701–7703.
 ## Worked Example
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
-import { verifyPQ } from "@veya/sdk/pq";
+import { VeyaClient } from "@veyanet/sdk";
+import { verifyPQ } from "@veyanet/sdk/pq";
 
 const client = new VeyaClient();
 const taskId = "rebalance-2026-08-31";
@@ -483,7 +483,7 @@ This wrapper is application code. `src/compute/consensus.ts` stays strict so loc
 
 ---
 
-After a successful quorum, persist `ConsensusResult` JSON in the application audit log (without relying on node disk). That record plus later `anchorPqAttestation` receipts is enough for an auditor to replay verification using `@veya/sdk/pq` and the explorer at `https://explorer.testnet.chain.robinhood.com`.
+After a successful quorum, persist `ConsensusResult` JSON in the application audit log (without relying on node disk). That record plus later `anchorPqAttestation` receipts is enough for an auditor to replay verification using `@veyanet/sdk/pq` and the explorer at `https://explorer.testnet.chain.robinhood.com`.
 
 ---
 

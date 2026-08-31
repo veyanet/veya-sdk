@@ -2,7 +2,7 @@
 
 **Run a production-grade validator fleet for VEYA decentralized compute: 3 nodes, 2-of-3 BLAKE3 quorum, ML-DSA-44 attestations, optional settlement on Robinhood Chain.**
 
-Independent `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veya/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. When the application anchors an agreed hash, it writes to `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet (chain id 46630) through `EvmAnchor`, not through a Solana program.
+Independent `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veyanet/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. When the application anchors an agreed hash, it writes to `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet (chain id 46630) through `EvmAnchor`, not through a Solana program.
 
 **Related:** [sdk/decentralized-compute.md](../sdk/decentralized-compute.md) • [sdk/pq-crypto.md](../sdk/pq-crypto.md) • [sdk/evm-anchoring.md](../sdk/evm-anchoring.md) • [sdk/configuration.md](../sdk/configuration.md)
 
@@ -34,7 +34,7 @@ Independent `validator-node` processes execute identical payloads, sign BLAKE3 d
 
 ## Purpose and Scope
 
-This runbook is for operators who run the validator fleet that `@veya/sdk` queries. It covers bind addresses, identities, quorum arithmetic, health, upgrades, and how consensus hashes become `Veya.sol` records. It does not replace the SDK client document; threshold logic in TypeScript is specified in [sdk/decentralized-compute.md](../sdk/decentralized-compute.md).
+This runbook is for operators who run the validator fleet that `@veyanet/sdk` queries. It covers bind addresses, identities, quorum arithmetic, health, upgrades, and how consensus hashes become `Veya.sol` records. It does not replace the SDK client document; threshold logic in TypeScript is specified in [sdk/decentralized-compute.md](../sdk/decentralized-compute.md).
 
 The fleet is application-level infrastructure. It is not Robinhood Chain consensus and not a set of EVM validators. Nodes do not produce blocks. They produce ML-DSA-attested BLAKE3 hashes over agent payloads.
 
@@ -71,7 +71,7 @@ Assumptions:
 ```mermaid
 flowchart TB
     subgraph Operator["Operator Layer"]
-        SDK["@veya/sdk runConsensus()"]
+        SDK["@veyanet/sdk runConsensus()"]
     end
 
     subgraph Fleet["Validator Fleet x3"]
@@ -104,7 +104,7 @@ flowchart TB
 | validator-node binary | HTTP server per node |
 | ML-DSA-44 identity | Per-process or persisted key |
 | BLAKE3 | Execution digest |
-| `@veya/sdk` | Orchestration and optional EVM write |
+| `@veyanet/sdk` | Orchestration and optional EVM write |
 
 Nodes should not share disks for identity files. Correlated identities collapse the independence assumption of 2-of-3.
 
@@ -356,7 +356,7 @@ The SDK sequential fetch means upgrading the first URL in `VEYA_VALIDATOR_NODES`
 ## SDK Integration
 
 ```typescript
-import { VeyaClient } from "@veya/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: [
@@ -423,7 +423,7 @@ A split-brain where two nodes collude on a hash is a 2-of-3 attack. Mitigate wit
 
 | Variable | Who reads it | Purpose |
 |----------|--------------|---------|
-| `VEYA_VALIDATOR_NODES` | `@veya/sdk` `resolveConfig` | Client URL list |
+| `VEYA_VALIDATOR_NODES` | `@veyanet/sdk` `resolveConfig` | Client URL list |
 | `ROBINHOOD_RPC_URL` | SDK anchoring only | JSON-RPC for `Veya.sol` |
 | `VEYA_DEPLOYER_PRIVATE_KEY` | SDK anchoring only | Must not live on validator hosts |
 | `RUST_LOG` | Node process | Log level |

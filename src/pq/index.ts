@@ -1,5 +1,5 @@
 /**
- * Post-quantum surface for @veya/sdk.
+ * Post-quantum surface for @veyanet/sdk.
  *
  * Algorithm profile (must match Rust validator-node / sealed-node):
  * - Identity: ML-DSA-44 (FIPS 204)

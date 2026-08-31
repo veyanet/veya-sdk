@@ -2,7 +2,7 @@
 
   # VEYA SDK | Security Policy
 
-  **Coordinated disclosure for @veya/sdk on Robinhood Chain.**
+  **Coordinated disclosure for @veyanet/sdk on Robinhood Chain.**
 
   **[Verification](docs/VERIFICATION.md)** • **[Architecture](docs/ARCHITECTURE.md)** • **[Contributing](CONTRIBUTING.md)**
 

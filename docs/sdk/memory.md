@@ -71,7 +71,7 @@ Assumptions:
 
 ```mermaid
 flowchart TB
-    subgraph SDK["@veya/sdk/memory"]
+    subgraph SDK["@veyanet/sdk/memory"]
         SM["storeMemory()"]
         RM["readMemory()"]
         IM["invalidateMemory()"]
@@ -159,7 +159,7 @@ On Windows, `os.homedir()` follows the user profile. The path is still `.veya/ag
 ## storeMemory
 
 ```typescript
-import { storeMemory } from "@veya/sdk";
+import { storeMemory } from "@veyanet/sdk";
 
 const entry = await storeMemory(
   "550e8400-e29b-41d4-a716-446655440000",
@@ -364,8 +364,8 @@ import {
   readMemory,
   invalidateMemory,
   listMemory,
-} from "@veya/sdk";
-import { VeyaClient } from "@veya/sdk";
+} from "@veyanet/sdk";
+import { VeyaClient } from "@veyanet/sdk";
 
 const environmentId = "550e8400-e29b-41d4-a716-446655440000";
 const agentId = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
