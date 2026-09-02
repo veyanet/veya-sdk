@@ -4,6 +4,46 @@ All notable changes to the `@veyanet/sdk` package will be documented in this fil
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Note:** Entries before **1.0.0** describe historical Solana-era packages. This tree (`robinhood/sdk`) settles on Robinhood Chain via `Veya.sol` only. Do not treat 0.x Solana / SPL Memo / enclave claims as current product truth.
+
+---
+
+## [1.2.0] — 2026-09-07
+
+### Added
+- Phase 2 SDK completion: on-chain read helpers (`commitmentExists`, `getCommitment`, `getNullifier`, `getSpendingLimitOnChain`, `verifyCommitmentOnChain`).
+- `parseAllProofsFromTransaction` for multi-event receipts.
+- Stranger verify path: `examples/verify-commitment.ts`, doctor + live-rpc eth_call cross-check.
+- `examples/phase2-operator.ts` documents spend / nullifier / attest surface.
+- Full `Veya.sol` custom-error selector map; `assertBytesLength` before writes.
+- `registerPqIdentity` returns ML-DSA `privateKey` + `environmentUuid` for custody.
+- `SDK_SURFACE` honesty card (AES-256-GCM, not FHE, not mainnet, not token).
+- `recordLocalSpend` name for in-memory ledger (alias `recordSpend` deprecated for clarity vs `EvmAnchor.recordSpend`).
+
+### Changed
+- `ENVIRONMENT_TYPES` match Solidity (`Execution` / `SecureEnclave` / `Governance`); legacy Isolated/Shared aliases retained.
+- `SDK_VERSION` synced to **1.2.0**; README honesty scrub (no hardware TEE / ZK theater).
+- Default `registerPqIdentity` uses `SecureEnclave` by name (same numeric `1` as before).
+
+### Security
+- Length asserts fail closed before RPC on UUID / commitment byte sizes.
+
+---
+
+## [1.1.0] — 2026-09-06
+
+### Added
+- Phase 2 operator surface aligned with hosted API `https://api.veyanet.tech` (testnet **46630**).
+- Docs honesty: sealed execution is **AES-256-GCM + BLAKE3 + ML-DSA**; public examples default to `api.veyanet.tech`; loopback is local debug only.
+- Explicit Phase 2 ship pack references: spend / nullifier / `attestExecution` on the hosted relayer path (backend), CORS allowlist, canary, fleet systemd.
+
+### Changed
+- Marketing and content docs no longer present AWS Nitro / Intel SGX / live FHE as the product path.
+- Changelog and README paths emphasize Robinhood Chain testnet settlement; mainnet remains Phase 3.
+
+### Security
+- Product docs and SDK examples refuse to imply open CORS or localhost as production.
+
 ---
 
 ## [1.0.0] — 2026-08-31
@@ -109,3 +149,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Cryptography Module**: Implemented client-side AES-256-GCM encryption for agent configurations using the native Web Crypto API (`node:crypto` / `webcrypto.subtle`).
 - Implemented `encryptAgentConfig()` and `decryptAgentConfig()` with 32-byte key padding derivation.
 - Basic API client skeleton and `Environment` interface definitions.
+# Modified: 2026-09-04T13:45:11
+# Modified: 2026-09-05T16:56:14
