@@ -1,17 +1,23 @@
+import { ethers } from "ethers";
+import { VEYA_ABI } from "../abi/index.js";
 import { explorerTxUrl, pingRpc } from "../chain.js";
 import { resolveConfig, describeConfig, type ResolvedVeyaConfig, type VeyaClientConfig } from "../config.js";
 import { runConsensus } from "../compute/consensus.js";
-import { VeyaSdkError } from "../errors/veya-error.js";
+import { VeyaSdkError, assertBytesLength, assertHex32 } from "../errors/veya-error.js";
 import * as pq from "../pq/index.js";
+import { ENVIRONMENT_TYPES } from "../program/instructions.js";
 import { protectedExec } from "../sealed/protectedExec.js";
 import { requireVerifiedSeal } from "../sealed/types.js";
-import { parseProofFromTransaction } from "./receipts.js";
+import {
+  parseAllProofsFromTransaction,
+  parseProofFromTransaction,
+} from "./receipts.js";
 import { EvmAnchor } from "./evm.js";
 
 /**
  * High-level VEYA SDK client — local PQ crypto, Robinhood Chain anchoring, consensus, sealed exec.
  *
- * Construct without a private key for hashing / consensus / sealed-node calls.
+ * Construct without a private key for hashing, verify, and on-chain reads.
  * Pass payerPrivateKey (or VEYA_DEPLOYER_PRIVATE_KEY) to enable EvmAnchor writes.
  */
 export class VeyaClient {
@@ -27,6 +33,12 @@ export class VeyaClient {
         payerPrivateKey: privateKey,
       });
     }
+  }
+
+  /** Read-only contract (no wallet). Used for stranger verify paths. */
+  private reader(): ethers.Contract {
+    const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
+    return new ethers.Contract(this.config.contractAddress, VEYA_ABI, provider);
   }
 
   describe(): Record<string, unknown> {
@@ -66,7 +78,7 @@ export class VeyaClient {
     return this.evm;
   }
 
-  async registerPqOnchain(envType = 1) {
+  async registerPqOnchain(envType: number = ENVIRONMENT_TYPES.SecureEnclave) {
     return this.requireEvm().registerPqIdentity(envType);
   }
 
@@ -89,8 +101,8 @@ export class VeyaClient {
     return requireVerifiedSeal(result);
   }
 
+  /** Parse the first Veya.sol event on a transaction (legacy helper). */
   async verifyTransaction(txHash: string) {
-    const { ethers } = await import("ethers");
     const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
     return parseProofFromTransaction(
       provider,
@@ -98,5 +110,61 @@ export class VeyaClient {
       this.config.contractAddress,
       this.config.explorerUrl,
     );
+  }
+
+  /** Parse every Veya.sol event on a transaction. */
+  async verifyTransactionAll(txHash: string) {
+    const provider = new ethers.JsonRpcProvider(this.config.rpcUrl);
+    return parseAllProofsFromTransaction(
+      provider,
+      txHash,
+      this.config.contractAddress,
+      this.config.explorerUrl,
+    );
+  }
+
+  /**
+   * Stranger verify: parse tx events AND eth_call `commitments(digest)`.
+   * No private key required.
+   */
+  async verifyCommitmentOnChain(txHash: string): Promise<{
+    proofs: Awaited<ReturnType<typeof parseAllProofsFromTransaction>>;
+    commitmentChecks: Array<{ digestHex: string; onChain: boolean }>;
+  }> {
+    const proofs = await this.verifyTransactionAll(txHash);
+    const checks: Array<{ digestHex: string; onChain: boolean }> = [];
+    for (const p of proofs) {
+      if (p.event !== "CommitmentStored") continue;
+      const onChain = await this.commitmentExists(p.digestHex);
+      checks.push({ digestHex: p.digestHex, onChain });
+    }
+    return { proofs, commitmentChecks: checks };
+  }
+
+  /** eth_call Veya.sol commitments(bytes32) — no key. */
+  async commitmentExists(digestHex: string): Promise<boolean> {
+    const hex = assertHex32(digestHex, "commitment");
+    const bytes = Uint8Array.from(Buffer.from(hex, "hex"));
+    return Boolean(await this.reader().commitments(ethers.hexlify(bytes)));
+  }
+
+  async nullifierExists(memoryId: Uint8Array): Promise<boolean> {
+    assertBytesLength(memoryId, 16, "memoryId");
+    return Boolean(await this.reader().nullifiers(ethers.hexlify(memoryId)));
+  }
+
+  async readEnvironment(environmentUuid: Uint8Array) {
+    assertBytesLength(environmentUuid, 16, "environmentUuid");
+    return this.reader().environments(ethers.hexlify(environmentUuid));
+  }
+
+  async readSpendingLimit(agentUuid: Uint8Array) {
+    assertBytesLength(agentUuid, 16, "agentUuid");
+    return this.reader().spendingLimits(ethers.hexlify(agentUuid));
+  }
+
+  async readAgent(agentUuid: Uint8Array) {
+    assertBytesLength(agentUuid, 16, "agentUuid");
+    return this.reader().agents(ethers.hexlify(agentUuid));
   }
 }
