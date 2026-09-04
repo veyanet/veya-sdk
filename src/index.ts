@@ -5,10 +5,13 @@
  * 2-of-3 validator consensus, and Veya.sol settlement on Robinhood Chain.
  * Commitments use BLAKE3. Identities use ML-DSA-44. Coordination sessions
  * use Kyber-768 KEM.
+ *
+ * Sealed execution = AES-256-GCM (not FHE / not SGX hardware attestation).
+ * Settlement today = Robinhood Chain testnet 46630. Mainnet is Phase 3.
  */
 
 export const SDK_NAME = "@veyanet/sdk";
-export const SDK_VERSION = "1.0.0";
+export const SDK_VERSION = "1.2.0";
 
 /** What this package is, in one object operators can log from doctor scripts. */
 export const SDK_SURFACE = {
@@ -16,10 +19,15 @@ export const SDK_SURFACE = {
   version: SDK_VERSION,
   chain: "Robinhood Chain",
   chainId: 46630,
+  network: "testnet",
   contract: "Veya.sol",
   identity: "ML-DSA-44",
   kem: "Kyber-768",
   commitment: "BLAKE3-256",
+  sealed: "AES-256-GCM",
+  notFhe: true,
+  notMainnet: true,
+  notToken: true,
 } as const;
 
 export { VeyaClient } from "./client/VeyaClient.js";
@@ -38,7 +46,15 @@ export {
 } from "./chain.js";
 export type { RobinhoodNetwork } from "./chain.js";
 
-export { VEYA_ABI, VEYA_BYTECODE, VEYA_PROTOCOL_CONTRACT_ADDRESS, VEYA_CONTRACT_ADDRESS, abiFunctionNames, abiEventNames, abiErrorNames } from "./abi/index.js";
+export {
+  VEYA_ABI,
+  VEYA_BYTECODE,
+  VEYA_PROTOCOL_CONTRACT_ADDRESS,
+  VEYA_CONTRACT_ADDRESS,
+  abiFunctionNames,
+  abiEventNames,
+  abiErrorNames,
+} from "./abi/index.js";
 
 export * as pq from "./pq/index.js";
 export * from "./sealed/index.js";
@@ -49,13 +65,20 @@ export * from "./coordination/policyAgent.js";
 export * from "./memory/nullifier.js";
 export * from "./spending/limits.js";
 export { EvmAnchor } from "./client/evm.js";
-export { parseVeyaLogs, parseProofFromTransaction } from "./client/receipts.js";
+export {
+  parseVeyaLogs,
+  parseProofFromTransaction,
+  parseAllProofsFromTransaction,
+} from "./client/receipts.js";
 export type { ParsedVeyaProof } from "./client/receipts.js";
 export * from "./program/instructions.js";
 export {
   VeyaSdkError,
   isVeyaSdkError,
   fromAnchorRevert,
+  assertBytesLength,
+  assertHex32,
+  assertHexAddress,
   VEYA_ERROR_CODES,
   VEYA_REVERT_SELECTORS,
 } from "./errors/veya-error.js";
