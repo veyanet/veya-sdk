@@ -93,14 +93,14 @@ export function parseVeyaLogs(
   return proofs;
 }
 
-export async function parseProofFromTransaction(
+export async function parseAllProofsFromTransaction(
   provider: ethers.Provider,
   txHash: string,
   contractAddress: string,
   explorerBase: string,
-): Promise<ParsedVeyaProof | null> {
+): Promise<ParsedVeyaProof[]> {
   const receipt = await provider.getTransactionReceipt(txHash);
-  if (!receipt) return null;
+  if (!receipt) return [];
   if ((receipt.to ?? "").toLowerCase() !== contractAddress.toLowerCase()) {
     throw new VeyaSdkError(
       "CHAIN_MISMATCH",
@@ -108,6 +108,21 @@ export async function parseProofFromTransaction(
       { to: receipt.to, expected: contractAddress, txHash },
     );
   }
-  const proofs = parseVeyaLogs(receipt.logs, contractAddress, txHash, explorerBase, receipt.blockNumber);
+  return parseVeyaLogs(receipt.logs, contractAddress, txHash, explorerBase, receipt.blockNumber);
+}
+
+/** First Veya.sol event on the receipt (legacy). Prefer parseAllProofsFromTransaction. */
+export async function parseProofFromTransaction(
+  provider: ethers.Provider,
+  txHash: string,
+  contractAddress: string,
+  explorerBase: string,
+): Promise<ParsedVeyaProof | null> {
+  const proofs = await parseAllProofsFromTransaction(
+    provider,
+    txHash,
+    contractAddress,
+    explorerBase,
+  );
   return proofs[0] ?? null;
 }
