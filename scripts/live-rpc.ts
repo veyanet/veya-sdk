@@ -1,5 +1,5 @@
 /**
- * Live RPC probe — fetch a known Veya.sol commitment transaction and parse logs.
+ * Live RPC probe — fetch a Veya.sol tx, parse logs, eth_call commitments().
  *
  *   npx tsx scripts/live-rpc.ts [txHash]
  */
@@ -19,10 +19,16 @@ console.log({
   tx: DEFAULT_TX,
 });
 
-const proof = await client.verifyTransaction(DEFAULT_TX);
-if (!proof) {
+const { proofs, commitmentChecks } = await client.verifyCommitmentOnChain(DEFAULT_TX);
+if (proofs.length === 0) {
   console.error("No Veya.sol event on that transaction");
   process.exitCode = 1;
 } else {
-  console.log(proof);
+  console.log({ proofs, commitmentChecks });
+  if (commitmentChecks.some((c) => !c.onChain)) {
+    console.error("FAIL: event present but commitments(digest) is false");
+    process.exitCode = 1;
+  } else {
+    console.log("OK: receipt events + on-chain commitment mapping");
+  }
 }
