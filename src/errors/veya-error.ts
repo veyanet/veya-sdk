@@ -15,6 +15,7 @@ export const VEYA_ERROR_CODES = [
   "INVALID_UUID",
   "INVALID_ADDRESS",
   "INVALID_CONFIG",
+  "INVALID_LENGTH",
   "CONSENSUS_UNREACHABLE",
   "CONSENSUS_NO_QUORUM",
   "SEALED_UNREACHABLE",
@@ -23,12 +24,22 @@ export const VEYA_ERROR_CODES = [
   "COMMITMENT_EXISTS",
   "ENVIRONMENT_EXISTS",
   "ENVIRONMENT_MISSING",
+  "AGENT_EXISTS",
+  "AGENT_MISSING",
+  "UNAUTHORIZED",
+  "SIGNATURE_TOO_LARGE",
   "ATTESTATION_EXISTS",
   "PQ_ATTESTATION_EXISTS",
+  "SPENDING_EXISTS",
+  "SPENDING_MISSING",
   "SPENDING_EXCEEDED",
+  "TOOL_NAME_TOO_LONG",
+  "MEMORY_NULLIFIED",
+  "SEALED_CHUNK_TOO_LARGE",
+  "INVALID_ENV_TYPE",
+  "INVALID_AGENT_ROLE",
   "PQ_VERIFY_FAILED",
   "MEMORY_INTEGRITY",
-  "MEMORY_NULLIFIED",
   "MEMORY_MISSING",
 ] as const;
 
@@ -36,12 +47,23 @@ export type VeyaErrorCode = (typeof VEYA_ERROR_CODES)[number];
 
 /** Solidity custom-error selectors from Veya.sol (keccak of the signature). */
 export const VEYA_REVERT_SELECTORS: Record<string, VeyaErrorCode> = {
-  "0x145718a7": "COMMITMENT_EXISTS",
+  "0xf8b14360": "INVALID_ENV_TYPE",
+  "0xac5d66cc": "INVALID_AGENT_ROLE",
   "0xb6d54abb": "ENVIRONMENT_EXISTS",
   "0xb90193fa": "ENVIRONMENT_MISSING",
+  "0x36094cb4": "AGENT_EXISTS",
+  "0xd3227c9b": "AGENT_MISSING",
+  "0x82b42900": "UNAUTHORIZED",
+  "0x26e27838": "SIGNATURE_TOO_LARGE",
   "0x631ecd51": "ATTESTATION_EXISTS",
   "0x2d37333f": "PQ_ATTESTATION_EXISTS",
+  "0x145718a7": "COMMITMENT_EXISTS",
+  "0x0de708a8": "SPENDING_EXISTS",
+  "0x5ac4cbd5": "SPENDING_MISSING",
   "0x8a9e71ea": "SPENDING_EXCEEDED",
+  "0x08f5357b": "TOOL_NAME_TOO_LONG",
+  "0xd6ff1812": "MEMORY_NULLIFIED",
+  "0x0d899363": "SEALED_CHUNK_TOO_LARGE",
 };
 
 export class VeyaSdkError extends Error {
@@ -102,6 +124,20 @@ export function fromAnchorRevert(err: unknown): VeyaSdkError {
       { selector, data },
     );
   }
+  if (mapped === "MEMORY_NULLIFIED") {
+    return new VeyaSdkError(
+      mapped,
+      "Memory nullifier already flagged on Veya.sol — spend-once memory cannot be reused",
+      { selector, data },
+    );
+  }
+  if (mapped === "SPENDING_EXCEEDED") {
+    return new VeyaSdkError(
+      mapped,
+      "On-chain spending limit exceeded for this agent",
+      { selector, data },
+    );
+  }
   if (mapped) {
     return new VeyaSdkError(mapped, rawMessage, { selector, data });
   }
@@ -123,4 +159,16 @@ export function assertHexAddress(value: string, label = "address"): string {
     });
   }
   return value;
+}
+
+/** Fail closed before RPC when UUID / commitment byte lengths are wrong. */
+export function assertBytesLength(bytes: Uint8Array, expected: number, label: string): Uint8Array {
+  if (bytes.length !== expected) {
+    throw new VeyaSdkError(
+      "INVALID_LENGTH",
+      `${label} must be ${expected} bytes (got ${bytes.length})`,
+      { expected, actual: bytes.length },
+    );
+  }
+  return bytes;
 }
