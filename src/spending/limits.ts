@@ -45,8 +45,11 @@ export function getSpendingLimit(
   return limits.get(key(environmentId, agentId));
 }
 
-/** Returns true if spend is allowed; throws if over cap. */
-export function recordSpend(
+/**
+ * In-process spending ledger (not Veya.sol).
+ * On-chain spend is `EvmAnchor.recordSpend(agentUuid, amount)`.
+ */
+export function recordLocalSpend(
   environmentId: string,
   agentId: string,
   amount: bigint | number,
@@ -74,6 +77,9 @@ export function recordSpend(
   limits.set(k, limit);
   return true;
 }
+
+/** @deprecated Use recordLocalSpend — this is in-memory, not EvmAnchor.recordSpend */
+export const recordSpend = recordLocalSpend;
 
 export function checkSpendAllowed(
   environmentId: string,
