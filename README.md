@@ -9,8 +9,11 @@
   [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.0-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
+  [![$VEYA Token](https://img.shields.io/badge/%24VEYA-0x81E770bA…C2dEa1-7C3AED.svg?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x81E770bA8343232b6f200209bf9a2c1430C2dEa1)
 
   **[Official Website](https://veyanet.tech)** • **[X (Twitter)](https://x.com/withveya)** • **[Documentation Index](./docs/README.md)** • **[Network Specifications](./docs/NETWORK_PIN.md)** • **[Security Policy](./SECURITY.md)**
+
+  **$VEYA Token CA:** [`0x81E770bA8343232b6f200209bf9a2c1430C2dEa1`](https://explorer.testnet.chain.robinhood.com/address/0x81E770bA8343232b6f200209bf9a2c1430C2dEa1)
 
 </div>
 
