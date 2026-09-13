@@ -78,7 +78,7 @@ flowchart LR
     D --> E["Off-Chain PQ Verification\n@veyanet/sdk pq module"]
 ```
 
-The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM). There is no program-derived addresses, and no SPL Memo companion path.
+The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM). There is no Solana client in this package, no program-derived addresses, and no SPL Memo companion path.
 
 ---
 
@@ -224,7 +224,7 @@ Each layer depends only on layers below it. `VeyaClient` constructed without `pa
 ```mermaid
 flowchart TB
     subgraph L5["L5: Application"]
-        MCP["MCP / Veilnet tools"]
+        MCP["MCP / Boundnet tools"]
         Agents["Agent runtimes"]
         Dash["robinhood/utility"]
     end
@@ -429,11 +429,11 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `client/evm.ts` | EVM integration
 
-`EvmAnchor` composes an ethers `JsonRpcProvider`, `Wallet`, and `Contract`. It does **not** pin `staticNetwork` so `getNetwork()` always queries `eth_chainId`. Methods map 1:1 to Solidity functions. `registerPqIdentity` is a convenience: ML-DSA keygen, `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint (named `memoTx` in the return object because it is the digest-anchor companion, implemented as `storeCommitment`).
+`EvmAnchor` composes an ethers `JsonRpcProvider`, `Wallet`, and `Contract`. It does **not** pin `staticNetwork` so `getNetwork()` always queries `eth_chainId`. Methods map 1:1 to Solidity functions. `registerPqIdentity` is a convenience: ML-DSA keygen, `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint (named `memoTx` in the return object because it is the digest-anchor companion, implemented as `storeCommitment`, not a Solana memo program).
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
-The API depends on `"@veyanet/sdk": "^1.0.0"`. It uses the SDK for Veilnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+The API depends on `"@veyanet/sdk": "^1.0.0"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
 
 ---
 
@@ -962,6 +962,7 @@ Procedures: [VERIFICATION.md](./VERIFICATION.md)
 | Cross-environment policy | Composite keys | Not in v1 |
 | TFHE homomorphic ops | sealed-node | Not claimed as live |
 
+Do not invent a token address, a second protocol contract, or a Solana companion program as an extension of this SDK.
 
 ---
 
