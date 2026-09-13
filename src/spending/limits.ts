@@ -1,6 +1,6 @@
 /**
  * Per-agent spending caps — enforced before consensus / sealed execution.
- * Amounts are wei on Robinhood Chain (native ETH), not Solana lamports.
+ * Amounts are wei on Robinhood Chain (native ETH).
  */
 
 import { VeyaSdkError } from "../errors/veya-error.js";

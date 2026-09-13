@@ -1,8 +1,7 @@
 /**
  * Veya.sol function names on Robinhood Chain.
  *
- * These are Solidity camelCase identifiers. The Solana program used
- * snake_case instruction names; that mapping does not apply here.
+ * These are Solidity camelCase identifiers.
  * EvmAnchor methods use the same names as this list.
  */
 

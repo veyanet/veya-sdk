@@ -1,7 +1,7 @@
 /**
  * Robinhood Chain defaults for the VEYA SDK.
  *
- * Settlement is EVM. There is no Solana program, no token mint, and no
+ * Settlement is EVM. There is no token mint, and no
  * brokerage API in this package. The protocol contract is Veya.sol — it
  * stores environment / agent / commitment state. It is not an ERC-20.
  */

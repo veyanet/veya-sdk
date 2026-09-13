@@ -581,7 +581,6 @@ npx tsx scripts/live-rpc.ts || exit 1
 | `VEYA_VALIDATOR_NODES` | `resolveConfig` | Comma-separated origins |
 | `VEYA_SEALED_NODE_URL` | `resolveConfig` | Sealed origin |
 
-The SDK does not read `SOLANA_*` variables. Setting them has no effect.
 
 Copy values from [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration). Never commit the payer key.
 

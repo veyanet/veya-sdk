@@ -48,7 +48,7 @@ describe("Robinhood Chain defaults", () => {
     expect(params.rpcUrls[0]).toBe(ROBINHOOD_TESTNET.rpcUrl);
   });
 
-  it("ABI includes Veya.sol write functions (camelCase, not Solana snake_case)", () => {
+  it("ABI includes Veya.sol write functions (camelCase, not snake_case)", () => {
     const names = new Set(abiFunctionNames());
     for (const fn of INSTRUCTION_NAMES) {
       expect(names.has(fn), `missing ${fn}`).toBe(true);

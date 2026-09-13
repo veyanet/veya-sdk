@@ -4,7 +4,7 @@ All notable changes to the `@veyanet/sdk` package will be documented in this fil
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> **Note:** Entries before **1.0.0** describe historical Solana-era packages. This tree (`robinhood/sdk`) settles on Robinhood Chain via `Veya.sol` only. Do not treat 0.x Solana / SPL Memo / enclave claims as current product truth.
+This package settles on **Robinhood Chain** via `Veya.sol` (testnet chain id `46630`). Mainnet is Phase 3.
 
 ---
 
@@ -68,21 +68,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - **Decentralized Compute Resource**: Added `veya.compute` (`DecentralizedComputeResource`) to orchestrate multi-node consensus-based tasks.
-- **Consensus Verification**: Integrated multi-node Ed25519 signature checking and state hash quorum matching.
-- **On-Chain State Anchoring**: Support for anchoring decentralized compute consensus outcomes directly to the blockchain via SPL Memos.
-- **Documentation**: Added the new `decentralized-compute.md` manual and updated the master index and root README files.
+- **Consensus Verification**: Integrated multi-node signature checking and state hash quorum matching.
+- **On-Chain State Anchoring**: Support for anchoring decentralized compute consensus outcomes on Robinhood Chain via `Veya.sol` commitments.
+- **Documentation**: Added the `decentralized-compute.md` manual and updated the master index and root README files.
 
 ---
 
 ## [0.1.1] — 2026-06-02
 
 ### Added
-- **Comprehensive Documentation Suite**: Complete rewrite of all technical documentation (`api-keys`, `api-map`, `ARCHITECTURE`, `authentication`, `configuration`, `crypto`, `environments-and-agents`, `error-handling`, `executions`, `memory`, `proofs-and-anchoring`, `quickstart`, `solana`).
+- **Comprehensive Documentation Suite**: Complete rewrite of technical documentation (`api-keys`, `api-map`, `ARCHITECTURE`, `authentication`, `configuration`, `crypto`, `environments-and-agents`, `error-handling`, `executions`, `memory`, `proofs-and-anchoring`, `quickstart`, Robinhood Chain network pin).
 - **Error Handling**: Exported `VeyaErrorCodes` enum for typed error matching (e.g., `LIMIT_EXCEEDED`, `INVALID_SIGNATURE`).
-- **Multi-Environment Support**: Added `resolveConfig()` utility to easily swap between staging and production API URLs.
+- **Multi-Environment Support**: Added `resolveConfig()` utility to swap between staging and production API URLs.
 
 ### Fixed
-- Replaced ambiguous `timeout` configuration field with `timeoutMs` to enforce clarity (defaults to `30000` ms).
+- Replaced ambiguous `timeout` configuration field with `timeoutMs` (defaults to `30000` ms).
 - Improved `authWithWallet` JWT session state persistence across page reloads.
 
 ---
@@ -90,25 +90,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [0.1.0] — 2026-05-31
 
 ### Added
-- **Initial Public Alpha** of `@veyanet/sdk`.
-- `Veya` client instantiation with `apiUrl` and `apiKey` overrides.
+- **Initial Public Alpha** of `@veyanet/sdk` for Robinhood Chain.
+- `Veya` / `VeyaClient` instantiation with RPC, contract, and API overrides.
 - **Agent Deployments**: `agents.deploy()` and `agents.deployEncrypted()` for deploying agents into isolated workspaces.
 - **Environments**: Full CRUD for workspaces including `spendingLimits` configuration.
-- **Zero-Knowledge Memory**: `memory.storeContent()` automatically hashes content via SHA-256 before network transmission.
+- **Memory Digests**: `memory.storeContent()` hashes content before network transmission.
 - **Standard Executions**: Read/write access to the `executions` observability layer for tracking agent activity.
-- **Protected Executions**: `protection.run()` for enclave-shielded operations with `discloseFields` and `sealFields` filtering.
-- **Solana Attestations**: `proofs.anchorContent()` to anchor execution hashes to the Solana ledger via SPL Memo.
-- **Authentication**: `authWithWallet()` flow using Ed25519 `signMessage` challenges to issue 24-hour Bearer JWTs.
+- **Protected Executions**: `protection.run()` / sealed path with `discloseFields` and `sealFields` filtering.
+- **Robinhood Attestations**: `proofs.anchorContent()` / `EvmAnchor` to settle execution hashes on Robinhood Chain testnet.
+- **Authentication**: Wallet sign-in flow issuing Bearer JWTs for API access.
 - **API Keys**: Programmatic creation, revocation, and scoping of `X-Api-Key` credentials.
-- **Solana Utilities**: `solana.cluster()`, PDA registration fetching, and `buildUnsignedAttestation()`.
+- **Chain Helpers**: Network pin, explorer URLs, and unsigned attestation builders for Robinhood Chain.
 
 ---
 
 ## [0.0.4-beta] — 2026-05-15
 
 ### Added
-- **Spending Budget Enforcement**: Introduced `spendLamports` to execution calls. The API now tracks cumulative period spend and throws `402 Payment Required` if the environment's `maxSolPerPeriod` is exceeded.
-- **Protected Runs**: Built out the enclave routing logic for `veya.protection`. Added strict validation ensuring `sealFields` are never returned in the `disclosed` payload map.
+- **Spending Budget Enforcement**: Introduced spend tracking in **wei** on execution calls. The API tracks cumulative period spend and throws `402 Payment Required` if the environment limit is exceeded.
+- **Protected Runs**: Built out sealed routing for `veya.protection`. Added strict validation ensuring `sealFields` are never returned in the `disclosed` payload map.
 - **API Key Tiers**: Differentiated between `vya_dev_...` and `vya_live_...` key prefixes in the auth header resolver.
 
 ### Changed
@@ -120,13 +120,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [0.0.3-alpha] — 2026-04-28
 
 ### Added
-- **Solana Relayer Integration**: Connected the SDK to the VEYA relayer for subsidized SPL Memo broadcasting.
-- `proofs.verifyTransaction()`: Public endpoint implementation allowing clients to cross-reference transaction signatures with the VEYA proof registry.
-- **PDA Identity**: Added endpoints for environment and agent PDA registration (`solana.environmentRegistration` and `solana.agentRegistration`).
+- **Robinhood Relayer Integration**: Connected the SDK to the VEYA relayer for subsidized settlement writes on Robinhood Chain testnet.
+- `proofs.verifyTransaction()`: Public verify path so clients can cross-reference transaction hashes with the VEYA proof registry.
+- **On-Chain Identity**: Environment and agent registration helpers against `Veya.sol`.
 
 ### Fixed
-- Fixed base58 encoding dependency issues in the wallet JWT signature verification flow.
-- Resolved a race condition where fast successive memory stores could clash on rate limits (implemented exponential backoff for `429` responses).
+- Hardened wallet JWT signature verification flow.
+- Resolved a race where fast successive memory stores could hit rate limits (exponential backoff for `429` responses).
 
 ---
 
@@ -134,20 +134,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - **Wallet JWT Authentication**: Implemented the two-step `GET /auth/nonce` and `POST /auth/verify` flow for wallet sign-in.
-- `HttpClient` interceptor to automatically attach `Authorization: Bearer` or `X-Api-Key` headers to all protected routes.
-- Initial implementation of the `memory` namespace for storing 64-character SHA-256 hex digests.
+- HTTP client interceptor to attach `Authorization: Bearer` or `X-Api-Key` headers to protected routes.
+- Initial `memory` namespace for storing content digests.
 
 ### Changed
-- Refactored all internal fetch calls to use an `AbortController` to prevent hanging promises on slow networks.
+- Refactored internal fetch calls to use an `AbortController` to prevent hanging promises on slow networks.
 
 ---
 
 ## [0.0.1-pre.0] — 2026-03-22
 
 ### Added
-- Repository initialization.
-- **Cryptography Module**: Implemented client-side AES-256-GCM encryption for agent configurations using the native Web Crypto API (`node:crypto` / `webcrypto.subtle`).
-- Implemented `encryptAgentConfig()` and `decryptAgentConfig()` with 32-byte key padding derivation.
+- Repository initialization for the Robinhood Chain SDK.
+- **Cryptography Module**: Client-side AES-256-GCM encryption for agent configurations (`node:crypto` / `webcrypto.subtle`).
+- `encryptAgentConfig()` and `decryptAgentConfig()` with 32-byte key padding derivation.
 - Basic API client skeleton and `Environment` interface definitions.
-# Modified: 2026-09-04T13:45:11
-# Modified: 2026-09-05T16:56:14

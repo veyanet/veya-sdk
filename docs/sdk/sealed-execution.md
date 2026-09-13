@@ -48,7 +48,7 @@ Readers should know what AES-256-GCM provides (confidentiality and integrity of 
 Assumptions:
 
 - `sealedNodeUrl` comes from `resolveConfig` (`VEYA_SEALED_NODE_URL` or `http://127.0.0.1:7800`).
-- Settlement, if any, is `EvmAnchor.storeSealedState` on Robinhood Chain, not a Solana instruction.
+- Settlement, if any, is `EvmAnchor.storeSealedState` on Robinhood Chain.
 - Function names on chain are camelCase (`storeSealedState`).
 - Spending and policy checks happen before calling `protectedExec` when the payload can trigger value movement. Sealed execution is not a spending gate.
 

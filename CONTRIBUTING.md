@@ -12,7 +12,7 @@
 
 ## Philosophy
 
-This package settles on **Robinhood Chain**, not Solana. Contributions must not reintroduce program IDs, PDA helpers, `bs58` payer secrets, or lamports as the native unit. Spending is **wei**. Instruction names are Solidity **camelCase**.
+This package settles on **Robinhood Chain**. Contributions must not reintroduce program IDs, PDA helpers, `bs58` payer secrets, or lamports as the native unit. Spending is **wei**. Instruction names are Solidity **camelCase**.
 
 Post-quantum first: new commitment paths use BLAKE3. Identities use ML-DSA-44. Coordination sessions use Kyber-768. Do not add SHA-256 on SDK commitment paths.
 
