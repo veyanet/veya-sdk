@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Canonical source** | `robinhood/contracts/Veya.sol` |
+| **Canonical ABI in this package** | `src/abi/Veya.json` |
 | **SDK ABI** | `src/abi/Veya.json` |
 | **Framework** | Solidity `^0.8.20`, ethers v6 client |
 | **Testnet address** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
