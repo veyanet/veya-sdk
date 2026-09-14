@@ -627,7 +627,7 @@ flowchart TD
 | VEYA architecture | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Verification procedures | [VERIFICATION.md](./VERIFICATION.md) |
 | Quickstart | [QUICKSTART.md](./QUICKSTART.md) |
-| `Veya.sol` | [../../contracts/Veya.sol](../../contracts/Veya.sol) |
+| `Veya.sol` | Vendored ABI: [../src/abi/Veya.json](../src/abi/Veya.json) |
 
 ---
 
