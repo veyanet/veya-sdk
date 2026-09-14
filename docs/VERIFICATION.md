@@ -675,7 +675,7 @@ That means the hosted wallet paid gas. Agent identity is still the ML-DSA finger
 | [POST_QUANTUM.md](./POST_QUANTUM.md) | ML-DSA, Kyber, BLAKE3 deep dive |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Trust boundaries and mappings |
 | [QUICKSTART.md](./QUICKSTART.md) | Operator tutorial |
-| [../../contracts/Veya.sol](../../contracts/Veya.sol) | Function and error definitions |
+| [src/abi/Veya.json](../src/abi/Veya.json) | Function and error definitions (vendored ABI) |
 | [../README.md](../README.md) | Package install and defaults |
 
 ---
