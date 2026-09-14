@@ -193,7 +193,7 @@ Data does not have to flow through `https://api.veyanet.tech`. Validators agree 
 ```
 +-------------------------------------------------------------------------+
 |                    Application / Agent Layer                            |
-|         (MCP tools, agent runtimes, robinhood/utility dashboard)        |
+|         (MCP tools, agent runtimes, hosted product console)             |
 +---------------------------------+---------------------------------------+
                                   |
 +---------------------------------v---------------------------------------+
@@ -226,7 +226,7 @@ flowchart TB
     subgraph L5["L5: Application"]
         MCP["MCP / Boundnet tools"]
         Agents["Agent runtimes"]
-        Dash["robinhood/utility"]
+        Dash["product console"]
     end
     subgraph L4["L4: Integration"]
         SDK["@veyanet/sdk"]
@@ -256,7 +256,7 @@ flowchart TB
     subgraph OperatorLayer["Operator / Agent Runtime"]
         Client["VeyaClient"]
         API["https://api.veyanet.tech"]
-        Dash["utility dashboard"]
+        Dash["product console"]
     end
 
     subgraph LocalBoundary["Local Process Boundary"]
@@ -743,7 +743,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    Dash["robinhood/utility"] --> API["https://api.veyanet.tech"]
+    Dash["product console"] --> API["https://api.veyanet.tech"]
     API --> SDK["@veyanet/sdk"]
     Integrator["Integrator process"] --> SDK
     SDK --> RPC["rpc.testnet.chain.robinhood.com"]
