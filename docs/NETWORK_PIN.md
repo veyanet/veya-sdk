@@ -18,7 +18,7 @@ This document contains the low-level network details and contract specifications
 | **Protocol Contract** | [`0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84) |
 | **Native Spending Unit** | **wei** (18-decimal ETH) |
 | **ABI Location** | Built into package (`src/abi/Veya.json`) |
-| **Machine-Readable Pin** | [`deployments/testnet.json`](../../deployments/testnet.json) |
+| **Machine-Readable Pin** | This file + `src/abi/Veya.json` + `src/chain.ts` |
 
 ---
 
