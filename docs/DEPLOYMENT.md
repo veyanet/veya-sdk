@@ -19,7 +19,7 @@ VEYA on Robinhood Chain requires **no hosted API server**. Operators run Node (`
 | **Client** | ethers v6, `EvmAnchor`, `VeyaClient`, `resolveConfig` |
 | **Algorithm** | ML-DSA-44 + Kyber-768 + BLAKE3-256 |
 
-**Related:** [deployments/testnet.json](../../deployments/testnet.json) • [CLI.md](./CLI.md) • [programs/veya-contract.md](./programs/veya-contract.md) • [api/types-reference.md](./api/types-reference.md)
+**Related:** [NETWORK_PIN.md](./NETWORK_PIN.md) • [CLI.md](./CLI.md) • [programs/veya-contract.md](./programs/veya-contract.md) • [api/types-reference.md](./api/types-reference.md)
 
 ---
 
@@ -111,7 +111,7 @@ npm test
 npm run build
 ```
 
-You do **not** need an ERC-20 deploy. If you rebuild Solidity, use the toolchain in `Veya Protocol` (Hardhat / Foundry / ethers deploy script there) and then refresh `src/abi/Veya.json` in this package.
+You do **not** need solana-cli, Anchor, or a BPF toolchain. You do **not** need an ERC-20 deploy. If you rebuild Solidity, use the toolchain in `Veya Protocol` (Hardhat / Foundry / ethers deploy script there) and then refresh `src/abi/Veya.json` in this package.
 
 ---
 
@@ -130,7 +130,7 @@ The protocol is live. Operators consume it; they do not need to deploy before ha
 | RPC | `https://rpc.testnet.chain.robinhood.com` |
 | Note | Deployed to Robinhood Chain Testnet using ethers.js |
 
-Machine-readable: [deployments/testnet.json](../../deployments/testnet.json).
+Machine-readable pins: [NETWORK_PIN.md](./NETWORK_PIN.md) and `src/chain.ts`.
 
 Explorer:
 
@@ -190,7 +190,7 @@ $env:VEYA_DEPLOYER_PRIVATE_KEY = "0x..."
 
 **Security rules:**
 
-- Do not put the key in `robinhood/deployments/testnet.json`, git, CI logs, or chat
+- Do not put the key in docs, git, CI logs, or chat
 - Restrict file permissions if you keep a keystore on disk
 - Prefer a dedicated testnet account; do not reuse a mainnet operator key
 - Rotate if the key ever appears in a shell history that is backed up
@@ -302,7 +302,7 @@ Redeploy only when you intend to replace the protocol address. Existing mapping 
 
 ### Source of truth
 
-Canonical Solidity: `robinhood/contracts/Veya.sol`.
+Canonical ABI in this package: `src/abi/Veya.json`.
 
 This package inlines the compiled ABI at `src/abi/Veya.json` and re-exports:
 
@@ -316,7 +316,7 @@ After a Solidity change:
 2. Copy ABI + bytecode into `src/abi/Veya.json`
 3. Deploy with ethers `ContractFactory` from a funded payer
 4. Update `VEYA_CONTRACT_ADDRESS` in `src/abi/index.ts` and `ROBINHOOD_TESTNET.contractAddress` in `src/chain.ts`
-5. Update `robinhood/deployments/testnet.json`
+5. Update [NETWORK_PIN.md](./NETWORK_PIN.md), `src/abi/index.ts`, and `src/chain.ts`
 6. Run `npm test` (ABI camelCase names must match `INSTRUCTION_NAMES`)
 
 ### ethers v6 factory sketch
@@ -363,7 +363,7 @@ Post-replace steps:
 1. Update `src/chain.ts` `ROBINHOOD_TESTNET.contractAddress`
 2. Update `src/abi/index.ts` `VEYA_CONTRACT_ADDRESS`
 3. Set `VEYA_CONTRACT_ADDRESS` in operator and API environments
-4. Update `robinhood/deployments/testnet.json`
+4. Update [NETWORK_PIN.md](./NETWORK_PIN.md) and the vendored ABI constants
 5. Rebuild consumers (`https://api.veyanet.tech` file: dependency)
 
 **Never** mix a leftover address from another EVM with Robinhood Chain writes. The chain-id guard is necessary but not sufficient if you also override `contractAddress` to a random ERC-20: the ABI would still encode Veya function selectors against the wrong bytecode.
@@ -678,4 +678,4 @@ Spending-limit **application** amounts (treasury caps) are independent of **gas*
 | [programs/storage-layouts.md](./programs/storage-layouts.md) | Mapping keys and slots |
 | [api/types-reference.md](./api/types-reference.md) | TypeScript types |
 | [../README.md](../README.md) | Package intro |
-| [../../deployments/testnet.json](../../deployments/testnet.json) | Live address record |
+| [NETWORK_PIN.md](./NETWORK_PIN.md) | Live address / chain pin |
