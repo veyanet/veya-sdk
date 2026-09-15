@@ -147,7 +147,7 @@ const { environmentTx, memoTx, explorer } = await client.registerPqOnchain();
 console.log(explorer.memo);
 ```
 
-`registerPqOnchain` is a convenience that generates an ML-DSA identity, calls `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint. The return field `memoTx` is that commitment transaction: it is **not** an SPL Memo.
+`registerPqOnchain` is a convenience that generates an ML-DSA identity, calls `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint. The return field `memoTx` is that commitment transaction: it is **not** an SPL Memo and not a Solana signature.
 
 `EvmAnchor` refuses to send if the RPC `eth_chainId` is not `46630` (or the `chainId` you passed in).
 
@@ -516,7 +516,7 @@ npm test
 npm run lint
 ```
 
-Unit tests pin chain id `46630`, explorer host, `VEYA_CONTRACT_ADDRESS`, ABI camelCase function names. PQ tests round-trip ML-DSA sign/verify and BLAKE3.
+Unit tests pin chain id `46630`, explorer host, `VEYA_CONTRACT_ADDRESS`, ABI camelCase function names, and the absence of Solana-style `register_environment`. PQ tests round-trip ML-DSA sign/verify and BLAKE3.
 
 Live RPC writes are **not** part of unit tests. They need a funded key. The hosted tree covers them with `https://api.veyanet.tech/scripts/live-ship-check.ts`.
 
@@ -539,7 +539,7 @@ When you **do** run the API:
 3. Keep guest JWT off write routes (guest may verify proofs; guest may not drive `registerEnvironment`)
 4. Confirm receipts with `receipt.to === Veya.sol`, not merely `status === 1`
 
-The dashboard (`robinhood/utility`) talks HTTP to the API. Integrators who want crypto + chain in-process skip both and import `@veyanet/sdk`.
+The hosted product console talks HTTP to the API. Integrators who want crypto + chain in-process skip both and import `@veyanet/sdk`.
 
 If the API is down, this quickstart still works: you have Node, three validators, one sealed-node, and a payer key.
 
@@ -594,6 +594,8 @@ export VEYA_VALIDATOR_NODES="http://127.0.0.1:7701,http://127.0.0.1:7702,http://
 export VEYA_SEALED_NODE_URL="http://127.0.0.1:7800"
 # export VEYA_DEPLOYER_PRIVATE_KEY=0x...   # funded; local only
 ```
+
+There is no Solana cluster variable, no program id, and no memo program id in this package.
 
 ---
 
@@ -714,7 +716,7 @@ The contract is working. Look up `commitments[digest]`. The original `authority`
 | PQ byte sizes and NIST refs | [POST_QUANTUM.md](./POST_QUANTUM.md) |
 | Off-chain audit procedures | [VERIFICATION.md](./VERIFICATION.md) |
 | Package README | [../README.md](../README.md) |
-| Contract source | [../../contracts/Veya.sol](../../contracts/Veya.sol) |
+| Contract ABI | [../src/abi/Veya.json](../src/abi/Veya.json) |
 
 ---
 
