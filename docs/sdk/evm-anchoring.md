@@ -41,7 +41,7 @@ The `EvmAnchor` class (`src/client/evm.ts`) submits real EVM transactions: envir
 
 ## Purpose and Scope
 
-This document is the operator and integrator reference for on-chain settlement through `@veyanet/sdk`. It covers every write method on `EvmAnchor`, the chain-id gate, wei-denominated spending, and the mapping from TypeScript calls to `Veya.sol` storage. It does not describe validator HTTP or sealed-node HTTP; those are off-chain and only become chain-visible when the operator later calls `attestExecution`, `anchorPqAttestation`, or `storeSealedState`.
+This document is the operator and integrator reference for on-chain settlement through `@veya/sdk`. It covers every write method on `EvmAnchor`, the chain-id gate, wei-denominated spending, and the mapping from TypeScript calls to `Veya.sol` storage. It does not describe validator HTTP or sealed-node HTTP; those are off-chain and only become chain-visible when the operator later calls `attestExecution`, `anchorPqAttestation`, or `storeSealedState`.
 
 The contract address on Robinhood Chain testnet is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. Explorers live at `https://explorer.testnet.chain.robinhood.com`. Chain id is `46630`. All of those values are defaults in `src/chain.ts` and are re-checked at write time.
 
@@ -131,7 +131,7 @@ flowchart TB
 ## Construction
 
 ```typescript
-import { EvmAnchor } from "@veyanet/sdk";
+import { EvmAnchor } from "@veya/sdk";
 
 const anchor = new EvmAnchor({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -145,7 +145,7 @@ const anchor = new EvmAnchor({
 `VeyaClient` instantiates `EvmAnchor` automatically when `payerPrivateKey` is provided:
 
 ```typescript
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
@@ -227,7 +227,7 @@ sequenceDiagram
     EA-->>App: 0x...
 ```
 
-`tx.wait()` uses ethers default confirmation (one block). Operators who need a deeper confirmation policy should wait additional blocks using `provider.waitForTransaction` after the hash returns. The SDK does not expose a commitment-level knob analogous to `confirmed` vs `finalized`; EVM finality is a function of the Robinhood Chain consensus rules.
+`tx.wait()` uses ethers default confirmation (one block). Operators who need a deeper confirmation policy should wait additional blocks using `provider.waitForTransaction` after the hash returns. The SDK does not expose a commitment-level knob analogous to Solana `confirmed` vs `finalized`; EVM finality is a function of the Robinhood Chain consensus rules.
 
 If the contract reverts, ethers throws and `send` does not return a hash. Map revert data with `fromAnchorRevert` in `src/errors/veya-error.ts` when typed error codes are required.
 
@@ -501,7 +501,7 @@ Read methods such as `getEnvironment` are not in the catalog because they do not
 | `Nullifier` | `bytes16` memoryId |
 | `SealedState` | `keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))` |
 
-When an explorer or indexer needs to find a tool policy, hash the packed agent UUID and tool name with keccak256, not BLAKE3. BLAKE3 is the commitment hash for payloads; keccak256 is only the EVM mapping key.
+Do not attempt to derive Solana-style seeds. When an explorer or indexer needs to find a tool policy, hash the packed agent UUID and tool name with keccak256, not BLAKE3. BLAKE3 is the commitment hash for payloads; keccak256 is only the EVM mapping key.
 
 ---
 
@@ -573,7 +573,7 @@ Spending functions do not move ETH. An application that treats `recordSpend` as 
 End-to-end identity plus commitment on Robinhood Chain testnet:
 
 ```typescript
-import { VeyaClient, ROBINHOOD_TESTNET } from "@veyanet/sdk";
+import { VeyaClient, ROBINHOOD_TESTNET } from "@veya/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
@@ -617,6 +617,7 @@ await client.evm!.initSpendingLimit(
 |---------|--------------|-----|
 | Expected chain id 46630 | RPC on another EVM | Use `https://rpc.testnet.chain.robinhood.com` |
 | `payerPrivateKey required` | Constructed `VeyaClient` without a key | Set `VEYA_DEPLOYER_PRIVATE_KEY` |
+| Invalid private key | Solana JSON array supplied | Use hex secp256k1 |
 | Environment explorer 404 | Hash missing `0x` and helper bypassed | Use `explorerFor` / `explorerTxUrl` |
 | Revert `SpendingLimitExceeded` | Units not wei | `ethers.parseEther` / `maxWeiPerAction` |
 | Revert `CommitmentAlreadyExists` | Duplicate digest | Skip; already anchored |
