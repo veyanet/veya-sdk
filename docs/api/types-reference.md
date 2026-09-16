@@ -2,7 +2,7 @@
 
 **Complete TypeScript type catalog for `@veyanet/sdk` on Robinhood Chain.**
 
-Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**.
+Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**: not Solana account layouts.
 
 Package: `@veyanet/sdk` at `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`.
 
@@ -365,7 +365,7 @@ declare const VEYA_BYTECODE: string;
 declare const VEYA_CONTRACT_ADDRESS: "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84";
 ```
 
-`VEYA_ABI` is the compiled JSON ABI inlined so `@veyanet/sdk` does not depend on `@veya/program`. Keep it in lockstep with `robinhood/contracts/Veya.sol`.
+`VEYA_ABI` is the compiled JSON ABI inlined so `@veyanet/sdk` does not depend on a separate program package. Keep it in lockstep with the deployed `Veya.sol` at `src/abi/Veya.json`.
 
 Public ABI surface includes:
 
