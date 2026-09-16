@@ -48,7 +48,7 @@ Readers should know what AES-256-GCM provides (confidentiality and integrity of 
 Assumptions:
 
 - `sealedNodeUrl` comes from `resolveConfig` (`VEYA_SEALED_NODE_URL` or `http://127.0.0.1:7800`).
-- Settlement, if any, is `EvmAnchor.storeSealedState` on Robinhood Chain.
+- Settlement, if any, is `EvmAnchor.storeSealedState` on Robinhood Chain, not a Solana instruction.
 - Function names on chain are camelCase (`storeSealedState`).
 - Spending and policy checks happen before calling `protectedExec` when the payload can trigger value movement. Sealed execution is not a spending gate.
 
@@ -72,7 +72,7 @@ Assumptions:
 
 ```mermaid
 flowchart TB
-    subgraph Client["@veyanet/sdk"]
+    subgraph Client["@veya/sdk"]
         PE["protectedExec()"]
         ENT["sessionEntropy\n32 random bytes"]
     end
@@ -124,7 +124,7 @@ Ciphertext is not decrypted on the SDK path during execution. Operators verify B
 
 ```mermaid
 sequenceDiagram
-    participant SDK as @veyanet/sdk
+    participant SDK as @veya/sdk
     participant SN as sealed-node
     participant PQ as ML-DSA / BLAKE3
 
@@ -146,7 +146,7 @@ Kyber may wrap session material in advanced deployments. The v1 node derives AES
 **File:** `src/sealed/protectedExec.ts`
 
 ```typescript
-import { protectedExec } from "@veyanet/sdk";
+import { protectedExec } from "@veya/sdk";
 
 const result = await protectedExec("http://127.0.0.1:7800", {
   environmentId: "550e8400-e29b-41d4-a716-446655440000",
@@ -231,7 +231,7 @@ If the body is neither wrapped nor legacy, it is returned as-is. A malformed bod
 ## VeyaClient Wrapper
 
 ```typescript
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 const client = new VeyaClient({
   sealedNodeUrl: process.env.VEYA_SEALED_NODE_URL,
@@ -366,7 +366,7 @@ After sealing, ciphertext is useful for data availability on `Veya.sol`. The cha
 
 The node's ML-DSA identity is generated at process start unless the operator persists it. A restart produces a new identity; historical signatures still verify with the old public key if it was recorded. Persist node identities in production so `verified` re-checks remain possible.
 
-`@veyanet/sdk` does not implement a trusted execution environment. "Sealed" names the cryptographic envelope and the operational boundary, not Intel SGX or a hypervisor enclave. Host hardening is an operations concern.
+`@veya/sdk` does not implement a trusted execution environment. "Sealed" names the cryptographic envelope and the operational boundary, not Intel SGX or a hypervisor enclave. Host hardening is an operations concern.
 
 ---
 
@@ -420,7 +420,7 @@ See [operations/sealed-node.md](../operations/sealed-node.md) for binary flags, 
 ## Worked Example
 
 ```typescript
-import { VeyaClient, hashBlake3 } from "@veyanet/sdk";
+import { VeyaClient, hashBlake3 } from "@veya/sdk";
 
 const client = new VeyaClient({
   sealedNodeUrl: "http://127.0.0.1:7800",
