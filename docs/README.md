@@ -21,13 +21,13 @@
 
 The `docs/` tree is the authoritative reference for **`@veyanet/sdk`**: the TypeScript SDK that integrators and the hosted Robinhood API (`https://api.veyanet.tech`) import in-process. The package provides ML-DSA-44 identity, Kyber-768 session transport, BLAKE3-256 commitments, 2-of-3 validator consensus, sealed-node protected execution, and **ethers v6** writes against **Veya.sol** on **Robinhood Chain**.
 
-Settlement is EVM. There is no program ID, no PDA derivation as the product surface, and no SPL Memo companion as the settlement path. `Veya.sol` is a **protocol contract** (environments, agents, attestations, commitments, spending caps, tool policies, memory nullifiers, sealed-state chunks). It is **not** an ERC-20 and it is not a token mint.
+This is not a Solana SDK. Settlement is EVM. There is no program ID, no PDA derivation as the product surface, and no SPL Memo companion as the settlement path. `Veya.sol` is a **protocol contract** (environments, agents, attestations, commitments, spending caps, tool policies, memory nullifiers, sealed-state chunks). It is **not** an ERC-20 and it is not a token mint.
 
 No hosted VEYA coordination API is required to use the primitives documented here. Operators run Node scripts against local validator nodes (ports 7701–7703), a sealed node (port 7800), and the public Robinhood Chain testnet JSON-RPC. The optional Rust operator binary `veya-cli` lives in `cli`; this documentation set is about driving `@veyanet/sdk` from Node.
 
 ### Live Robinhood Chain testnet status
 
-`Veya.sol` is **deployed** on Robinhood Chain testnet. Machine-readable state lives in [deployments/testnet.json](../../deployments/testnet.json).
+`Veya.sol` is **deployed** on Robinhood Chain testnet. Settlement pins live in [NETWORK_PIN.md](./NETWORK_PIN.md) and the vendored ABI at `src/abi/Veya.json`.
 
 | Field | Value |
 |-------|-------|
@@ -80,7 +80,7 @@ These constraints apply to every document, code path, and operator workflow in t
 | **Chain-id guard** | `EvmAnchor.ensureRobinhoodChain()` refuses writes when `eth_chainId` is not `46630` (or the configured id) | [DEPLOYMENT.md](./DEPLOYMENT.md) |
 | **Wei, not another chain’s native unit** | Spending caps on Robinhood Chain are **wei** (18-decimal ETH) | [programs/storage-layouts.md](./programs/storage-layouts.md) |
 
-**Explicit exclusions:** PDA-as-settlement, SPL Memo as the product path, ERC-20 token semantics for `Veya.sol`, and SHA-256 on new commitment paths.
+**Explicit exclusions:** Solana program IDs, PDA-as-settlement, SPL Memo as the product path, ERC-20 token semantics for `Veya.sol`, and SHA-256 on new commitment paths.
 
 ---
 
@@ -125,7 +125,7 @@ flowchart TB
     end
 
     subgraph Live["Live Testnet Proof"]
-        JSON["robinhood/deployments/testnet.json"]
+        JSON["NETWORK_PIN.md + src/abi"]
         EXPL["explorer.testnet.chain.robinhood.com"]
     end
 
@@ -246,16 +246,16 @@ flowchart LR
 └── README.md             # Package intro
 ```
 
-Related trees outside this package:
+Related surfaces (outside this package):
 
-| Path | Role |
-|------|------|
-| `robinhood/contracts/Veya.sol` | Protocol source pin; ABI in `src/abi/` must stay in lockstep |
-| `robinhood/deployments/testnet.json` | Live address, deployer, timestamp |
-| `robinhood/fixtures/testnet-proofs.json` | Known testnet receipt hashes |
-| `cli` | Optional Rust `veya-cli` (not this package) |
+| Surface | Role |
+|---------|------|
+| Vendored ABI `src/abi/Veya.json` | Protocol ABI pin for this package |
+| [NETWORK_PIN.md](./NETWORK_PIN.md) | Chain id, RPC, explorer, contract address |
+| Public explorer | Live receipt / address verification |
 | `https://api.veyanet.tech` | Hosted API that imports `@veyanet/sdk` |
-| `robinhood/utility` | Dashboard; talks HTTP to the API, not to this package directly |
+| Hosted product console | Browser UI; talks HTTP to the API, not to this package directly |
+| `@veyanet/mcp` | Public Streamable HTTP MCP surface |
 
 ---
 
@@ -347,7 +347,7 @@ flowchart TB
 
 | Field | Value |
 |-------|-------|
-| Solidity source | `robinhood/contracts/Veya.sol` |
+| Solidity source | Vendored as ABI in `src/abi/Veya.json` (this package) |
 | Testnet address | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
 | SDK constant | `VEYA_CONTRACT_ADDRESS` / `ROBINHOOD_TESTNET.contractAddress` |
 | Function count | 10 writes + public mapping getters + constants |
@@ -382,6 +382,7 @@ npm test
 npm run build
 ```
 
+Rust, Anchor, and Solana CLI are **not** required to consume this package. They are relevant only if you rebuild `Veya.sol` from `Veya Protocol` or run `veya-cli`.
 
 ---
 
@@ -512,6 +513,10 @@ Off-chain only. `VEYA_DEPLOYER_PRIVATE_KEY` is an secp256k1 hex key for gas paym
 ### Is Veya.sol a token?
 
 **No.** There is no `transfer`, no `balanceOf`, no decimals on a VEYA token. Native ETH pays gas. Spending limits count **wei** of native currency recorded by agents, not token balances.
+
+### How is this different from the Solana VEYA program?
+
+The Solana tree (`anchor/`) uses PDAs and (historically) memo companions. This package talks to **mappings** on **Veya.sol** at a 20-byte address on chain id **46630**. Function names are camelCase (`registerEnvironment`), not snake_case. Amounts are wei.
 
 ### Where do I report security issues?
 
