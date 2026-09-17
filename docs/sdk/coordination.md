@@ -147,7 +147,7 @@ type McpMessage = {
 ### setToolPolicy
 
 ```typescript
-import { setToolPolicy } from "@veyanet/sdk";
+import { setToolPolicy } from "@veya/sdk";
 
 setToolPolicy("agent-uuid", "transfer_funds", true);
 setToolPolicy("agent-uuid", "external_api", false);
@@ -177,7 +177,7 @@ Production runtimes should call `setToolPolicy` for every `ToolPolicy` record fe
 ## routeMessage
 
 ```typescript
-import { routeMessage } from "@veyanet/sdk";
+import { routeMessage } from "@veya/sdk";
 
 const routed = routeMessage({
   id: crypto.randomUUID(),
@@ -359,7 +359,7 @@ Align local `maxAmount` with `EvmAnchor.initSpendingLimit(..., maxAmountWei, per
 sequenceDiagram
     participant Owner as Environment Owner
     participant V as Veya.sol
-    participant SDK as @veyanet/sdk
+    participant SDK as @veya/sdk
     participant Agent as Agent Runtime
 
     Owner->>V: defineToolPolicy(env, agent, tool, allowed)
@@ -443,8 +443,8 @@ import {
   setSpendingLimit,
   routeSecureMessage,
   verifySecureMessage,
-} from "@veyanet/sdk";
-import * as pq from "@veyanet/sdk/pq";
+} from "@veya/sdk";
+import * as pq from "@veya/sdk/pq";
 
 const environmentId = "550e8400-e29b-41d4-a716-446655440000";
 const agentId = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
