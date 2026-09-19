@@ -2,13 +2,8 @@ import { ethers } from "ethers";
 import { VEYA_ABI } from "../abi/index.js";
 import { explorerTxUrl } from "../chain.js";
 import { resolveConfig, type VeyaClientConfig } from "../config.js";
-import {
-  VeyaSdkError,
-  assertBytesLength,
-  fromAnchorRevert,
-} from "../errors/veya-error.js";
+import { VeyaSdkError, fromAnchorRevert, NO_TESTNET_TOKENS } from "../errors/veya-error.js";
 import * as pq from "../pq/index.js";
-import { ENVIRONMENT_TYPES } from "../program/instructions.js";
 
 /**
  * EVM anchoring client — submits real Robinhood Chain transactions to Veya.sol.
@@ -17,9 +12,6 @@ import { ENVIRONMENT_TYPES } from "../program/instructions.js";
  * the first write verifies that the RPC chain id matches the configured
  * Robinhood chain id (46630 on testnet) so a mis-pointed RPC cannot silently
  * land on another EVM.
- *
- * Read helpers (getCommitment, getNullifier, …) also work through this contract
- * instance; for no-key reads prefer VeyaClient.read* helpers.
  */
 export class EvmAnchor {
   readonly provider: ethers.JsonRpcProvider;
@@ -64,10 +56,14 @@ export class EvmAnchor {
     this.networkChecked = true;
   }
 
-  private async send(txPromise: Promise<ethers.ContractTransactionResponse>): Promise<string> {
+  private async send(sendTx: () => Promise<ethers.ContractTransactionResponse>): Promise<string> {
     await this.ensureRobinhoodChain();
+    const balance = await this.provider.getBalance(this.wallet.address);
+    if (balance === 0n) {
+      throw new VeyaSdkError("UNFUNDED_PAYER", NO_TESTNET_TOKENS);
+    }
     try {
-      const tx = await txPromise;
+      const tx = await sendTx();
       const receipt = await tx.wait();
       if (!receipt?.hash) {
         throw new VeyaSdkError("ANCHOR_REVERT", "transaction mined without a hash");
@@ -84,9 +80,7 @@ export class EvmAnchor {
     pqPubkeyHash: Uint8Array,
     envType: number,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(pqPubkeyHash, 32, "pqPubkeyHash");
-    return this.send(
+    return this.send(() =>
       this.contract.registerEnvironment(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(pqPubkeyHash),
@@ -102,10 +96,7 @@ export class EvmAnchor {
     agentRole: number,
     agentPqHash: Uint8Array,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    assertBytesLength(agentPqHash, 32, "agentPqHash");
-    return this.send(
+    return this.send(() =>
       this.contract.registerAgent(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(agentUuid),
@@ -117,9 +108,7 @@ export class EvmAnchor {
 
   /** Store a 32-byte BLAKE3 (or content) commitment on-chain. */
   async storeCommitment(environmentUuid: Uint8Array, commitment: Uint8Array): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(commitment, 32, "commitment");
-    return this.send(
+    return this.send(() =>
       this.contract.storeCommitment(ethers.hexlify(environmentUuid), ethers.hexlify(commitment)),
     );
   }
@@ -130,10 +119,7 @@ export class EvmAnchor {
     identityHash: Uint8Array,
     executionHash: Uint8Array,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(identityHash, 32, "identityHash");
-    assertBytesLength(executionHash, 32, "executionHash");
-    return this.send(
+    return this.send(() =>
       this.contract.anchorPqAttestation(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(identityHash),
@@ -148,9 +134,7 @@ export class EvmAnchor {
     blake3Hash: Uint8Array,
     mldsaSig: Uint8Array,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(blake3Hash, 32, "blake3Hash");
-    return this.send(
+    return this.send(() =>
       this.contract.attestExecution(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(blake3Hash),
@@ -165,14 +149,12 @@ export class EvmAnchor {
     maxAmount: bigint,
     periodSecs: number,
   ): Promise<string> {
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    return this.send(this.contract.initSpendingLimit(ethers.hexlify(agentUuid), maxAmount, periodSecs));
+    return this.send(() => this.contract.initSpendingLimit(ethers.hexlify(agentUuid), maxAmount, periodSecs));
   }
 
-  /** Record spend amount against the on-chain cap (Veya.sol). */
+  /** Record spend amount against the on-chain cap. */
   async recordSpend(agentUuid: Uint8Array, amount: bigint): Promise<string> {
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    return this.send(this.contract.recordSpend(ethers.hexlify(agentUuid), amount));
+    return this.send(() => this.contract.recordSpend(ethers.hexlify(agentUuid), amount));
   }
 
   /** Define MCP tool policy for an agent. */
@@ -182,9 +164,7 @@ export class EvmAnchor {
     toolName: string,
     allowed: boolean,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    return this.send(
+    return this.send(() =>
       this.contract.defineToolPolicy(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(agentUuid),
@@ -196,9 +176,7 @@ export class EvmAnchor {
 
   /** Flag memory nullifier (spend-once). */
   async flagMemoryNullifier(environmentUuid: Uint8Array, memoryId: Uint8Array): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(memoryId, 16, "memoryId");
-    return this.send(
+    return this.send(() =>
       this.contract.flagMemoryNullifier(ethers.hexlify(environmentUuid), ethers.hexlify(memoryId)),
     );
   }
@@ -211,10 +189,7 @@ export class EvmAnchor {
     blake3CiphertextHash: Uint8Array,
     ciphertextChunk: Uint8Array,
   ): Promise<string> {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
-    assertBytesLength(stateId, 16, "stateId");
-    assertBytesLength(blake3CiphertextHash, 32, "blake3CiphertextHash");
-    return this.send(
+    return this.send(() =>
       this.contract.storeSealedState(
         ethers.hexlify(environmentUuid),
         ethers.hexlify(stateId),
@@ -227,56 +202,19 @@ export class EvmAnchor {
 
   /** Read environment record from Veya.sol. */
   async getEnvironment(environmentUuid: Uint8Array) {
-    assertBytesLength(environmentUuid, 16, "environmentUuid");
     return this.contract.environments(ethers.hexlify(environmentUuid));
-  }
-
-  /** True when `commitments(digest)` is set on Veya.sol. */
-  async getCommitment(commitment: Uint8Array): Promise<boolean> {
-    assertBytesLength(commitment, 32, "commitment");
-    return Boolean(await this.contract.commitments(ethers.hexlify(commitment)));
-  }
-
-  /** True when memory nullifier is flagged. */
-  async getNullifier(memoryId: Uint8Array): Promise<boolean> {
-    assertBytesLength(memoryId, 16, "memoryId");
-    return Boolean(await this.contract.nullifiers(ethers.hexlify(memoryId)));
-  }
-
-  /** On-chain spending limit tuple for an agent. */
-  async getSpendingLimitOnChain(agentUuid: Uint8Array) {
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    return this.contract.spendingLimits(ethers.hexlify(agentUuid));
-  }
-
-  /** Agent record from Veya.sol. */
-  async getAgent(agentUuid: Uint8Array) {
-    assertBytesLength(agentUuid, 16, "agentUuid");
-    return this.contract.agents(ethers.hexlify(agentUuid));
-  }
-
-  /** Attestation mapping for a BLAKE3 hash. */
-  async getAttestation(blake3Hash: Uint8Array) {
-    assertBytesLength(blake3Hash, 32, "blake3Hash");
-    return this.contract.attestations(ethers.hexlify(blake3Hash));
   }
 
   /** Anchor memo with BLAKE3 hash (storeCommitment). */
   async anchorMemo(environmentUuid: Uint8Array, blake3Hex: string): Promise<string> {
-    const hex = blake3Hex.replace(/^0x/, "");
-    const commitment = Uint8Array.from(Buffer.from(hex, "hex"));
+    const commitment = Uint8Array.from(Buffer.from(blake3Hex.replace(/^0x/, ""), "hex"));
     return this.storeCommitment(environmentUuid, commitment);
   }
 
-  /**
-   * Full PQ identity registration: keygen + on-chain env + commitment.
-   * Returns the ML-DSA private key — caller must custody it; the SDK does not persist it.
-   */
-  async registerPqIdentity(envType: number = ENVIRONMENT_TYPES.SecureEnclave): Promise<{
+  /** Full PQ identity registration: keygen + on-chain env + commitment. */
+  async registerPqIdentity(envType = 1): Promise<{
     publicKey: Uint8Array;
-    privateKey: Uint8Array;
     publicKeyHash: string;
-    environmentUuid: Uint8Array;
     environmentTx: string;
     memoTx: string;
     explorer: { environment: string; memo: string };
@@ -290,9 +228,7 @@ export class EvmAnchor {
     const memoTx = await this.anchorMemo(uuid, hashHex);
     return {
       publicKey,
-      privateKey,
       publicKeyHash: hashHex,
-      environmentUuid: uuid,
       environmentTx: envTx,
       memoTx,
       explorer: {
