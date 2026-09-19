@@ -1,8 +1,7 @@
 /**
  * Robinhood Chain defaults for the VEYA SDK.
  *
- * Settlement is EVM. There is no token mint, and no
- * brokerage API in this package. The protocol contract is Veya.sol — it
+ * Settlement is EVM. The protocol contract is Veya.sol — it
  * stores environment / agent / commitment state. It is not an ERC-20.
  */
 
@@ -23,7 +22,10 @@ export const ROBINHOOD_TESTNET = {
   },
   /** Deployed Veya.sol (protocol, not a token). */
   contractAddress: "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
+  faucetUrl: "https://faucet.testnet.chain.robinhood.com/",
 } as const;
+
+export const ROBINHOOD_TESTNET_FAUCET_URL = ROBINHOOD_TESTNET.faucetUrl;
 
 export type RobinhoodNetwork = typeof ROBINHOOD_TESTNET;
 
