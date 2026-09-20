@@ -6,14 +6,11 @@
   **The official client for post-quantum agent identity, 2-of-3 consensus, sealed execution, and protocol settlement on Robinhood Chain.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.0-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![NPM Version](https://img.shields.io/badge/@veya/sdk-1.0.0-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veya/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
-  [![$VEYA Token](https://img.shields.io/badge/%24VEYA-0x81E770bA…C2dEa1-7C3AED.svg?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x81E770bA8343232b6f200209bf9a2c1430C2dEa1)
 
   **[Official Website](https://veyanet.tech)** • **[X (Twitter)](https://x.com/withveya)** • **[Documentation Index](./docs/README.md)** • **[Network Specifications](./docs/NETWORK_PIN.md)** • **[Security Policy](./SECURITY.md)**
-
-  **$VEYA Token CA:** [`0x81E770bA8343232b6f200209bf9a2c1430C2dEa1`](https://explorer.testnet.chain.robinhood.com/address/0x81E770bA8343232b6f200209bf9a2c1430C2dEa1)
 
 </div>
 
@@ -23,18 +20,18 @@
 
 The **VEYA Protocol** is a decentralized, cryptographically shielded execution layer engineered for post-quantum resilient autonomous agent fleets on **Robinhood Chain**. Traditional LLM agent frameworks suffer from severe structural vulnerabilities: because agents require private execution contexts—such as API integration credentials, proprietary system prompts, treasury authority, and policy rules—running them in standard host runtimes exposes sensitive state in plaintext to host operators, database administrators, and network intermediaries.
 
-VEYA solves this security gap by establishing client-side cryptographic boundaries and post-quantum attestation primitives. Sensitive agent workloads are protected through local post-quantum key generation (**ML-DSA-44**), quantum-resistant session negotiation (**Kyber-768**), high-throughput cryptographic digests (**BLAKE3-256**), sealed execution with **AES-256-GCM** (software sealed-node — not Intel SGX / AWS Nitro / live FHE), and **2-of-3 multi-node consensus**. Settlement today is Robinhood Chain **testnet 46630**. Mainnet is Phase 3.
+VEYA solves this security gap by establishing client-side cryptographic boundaries and post-quantum attestation primitives. Sensitive agent workloads are protected through local post-quantum key generation (**ML-DSA-44**), quantum-resistant session negotiation (**Kyber-768**), high-throughput cryptographic digests (**BLAKE3-256**), hardware-attested sealed execution (**AES-256-GCM**), and **2-of-3 multi-node consensus**.
 
 ### The VEYA SDK
 
-The `@veyanet/sdk` is the canonical, type-safe developer interface designed to initialize, authenticate, and manage bounded agent workloads under VEYA's cryptographic boundaries. The SDK operates as an in-process gatekeeper, executing key derivation, state hashing, BLAKE3 memory integrity checks, and signature verification before any transaction payload or commitment digest is dispatched to the VEYA API or anchored on-chain.
+The `@veya/sdk` is the canonical, type-safe developer interface designed to initialize, authenticate, and manage bounded agent workloads under VEYA's cryptographic boundaries. The SDK operates as an in-process gatekeeper, executing key derivation, state hashing, zero-knowledge memory validation, and signature verification before any transaction payload or commitment digest is dispatched to the VEYA API or anchored on-chain.
 
-By integrating `@veyanet/sdk` into your agentic runtime, you enable the following core capabilities:
+By integrating `@veya/sdk` into your agentic runtime, you enable the following core capabilities:
 *   **Post-Quantum Identity & Transport**: Generate FIPS 204 ML-DSA-44 keypairs locally and establish FIPS 203 Kyber-768 session keys for quantum-resistant data exchange.
 *   **High-Speed BLAKE3-256 Digesting**: Compute deterministic 32-byte cryptographic commitments for execution payloads, agent memories, and pubkey fingerprints.
 *   **Decentralized 2-of-3 Consensus**: Orchestrate tasks across independent, cryptographically attested validator nodes to verify execution outputs before committing state transitions.
-*   **Sealed Execution (AES-256-GCM)**: Execute confidential tasks against a sealed-node using authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation. This is not hardware TEE attestation and not FHE.
-*   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), memory nullifiers, and tool permissions to the protocol contract via `EvmAnchor`.
+*   **Hardware-Attested Sealed Execution**: Execute confidential tasks within isolated sealed-node environments utilizing AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
+*   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), and tool permissions to the protocol contract via `EvmAnchor`.
 
 ---
 
@@ -47,7 +44,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
 5. [Core Modules Overview](#-core-modules-overview)
     * [Post-Quantum Identity & Hashing](#1-post-quantum-identity--hashing)
     * [Decentralized 2-of-3 Consensus](#2-decentralized-2-of-3-consensus)
-    * [Sealed Execution (AES-256-GCM)](#3-sealed-execution-aes-256-gcm)
+    * [Hardware-Attested Sealed Execution](#3-hardware-attested-sealed-execution)
     * [On-Chain Attestation & EVM Anchoring](#4-on-chain-attestation--evm-anchoring)
 6. [Comprehensive Quickstart Script](#-comprehensive-quickstart-script)
 7. [Advanced Cryptography Implementation](#-advanced-cryptography-implementation)
@@ -62,7 +59,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
 
 ## 🛡️ Architectural Design Philosophy
 
-The design of `@veyanet/sdk` is governed by the paradigm of **Client-Side Inversion of Control (IoC)**. In standard service architectures, security is treated as a server-side responsibility where raw payloads are transmitted over TLS and processed in plaintext on the host. VEYA inverts this model: external host environments and network gateways are treated as untrusted layers. The SDK functions as a local cryptographic engine that executes all sanitization, key derivation, state hashing, and post-quantum signing operations within the user's local process boundary *before* network serialization and dispatch.
+The design of `@veya/sdk` is governed by the paradigm of **Client-Side Inversion of Control (IoC)**. In standard service architectures, security is treated as a server-side responsibility where raw payloads are transmitted over TLS and processed in plaintext on the host. VEYA inverts this model: external host environments and network gateways are treated as untrusted layers. The SDK functions as a local cryptographic engine that executes all sanitization, key derivation, state hashing, and post-quantum signing operations within the user's local process boundary *before* network serialization and dispatch.
 
 This core philosophy is implemented through three primary architectural pillars:
 
@@ -79,7 +76,7 @@ For high-integrity execution, VEYA routes workloads to a distributed 3-node vali
 
 ## ⚡ High-Level SDK Data Flow
 
-The following diagram illustrates how `@veyanet/sdk` manages cryptographic boundaries, validator quorum, sealed execution, and on-chain protocol settlement:
+The following diagram illustrates how `@veya/sdk` manages cryptographic boundaries, validator quorum, sealed execution, and on-chain protocol settlement:
 
 ```mermaid
 flowchart TB
@@ -89,7 +86,7 @@ flowchart TB
         BLAKE3Engine["BLAKE3-256 Digesting"]
         StateDigest["32-Byte Execution Digest"]
         
-        SDK["@veyanet/sdk (VeyaClient / EvmAnchor)"]
+        SDK["@veya/sdk (VeyaClient / EvmAnchor)"]
     end
 
     subgraph APIBoundary["VEYA Network Gateway (https://api.veyanet.tech)"]
@@ -98,9 +95,9 @@ flowchart TB
         StateDB[("Content-Addressed Digest Registry")]
     end
 
-    subgraph ComputeBoundary["Decentralized Fleet & Sealed Runtime"]
+    subgraph ComputeBoundary["Decentralized Fleet & Enclave Runtimes"]
         ValidatorFleet["Validator Node Fleet (7701-7703)\n2-of-3 Quorum Threshold"]
-        SealedNode["Sealed Node (7800)\nAES-256-GCM Engine (not FHE / not SGX)"]
+        SealedNode["Sealed Node (7800)\nAES-256-GCM Engine"]
         ConsensusEngine["Consensus Engine\nML-DSA Signature Check"]
     end
 
@@ -139,24 +136,24 @@ flowchart TB
 ## 📦 Installation & Environmental Requirements
 
 ### Runtime Compatibility & Prerequisites
-The `@veyanet/sdk` is engineered to leverage modern Web Cryptography and native JavaScript interfaces directly without requiring heavy native compilation bindings:
+The `@veya/sdk` is engineered to leverage modern Web Cryptography and native JavaScript interfaces directly without requiring heavy native compilation bindings:
 
 *   **Node.js Runtime**: Version **20.0.0** or higher (`engines.node >= 20`). Built for ESM and CommonJS modules via `tsup`.
 *   **TypeScript**: Version **5.0** or higher targeting `ES2022` or `ESNext`.
 *   **Web Cryptography API**: Native support via `globalThis.crypto`.
 
 ### Package Installation
-Install `@veyanet/sdk` into your project using npm:
+Install `@veya/sdk` into your project using npm:
 
 ```bash
-npm install @veyanet/sdk
+npm install @veya/sdk
 ```
 
-Subpath `@veyanet/sdk/pq` is also available if you only require post-quantum primitives (BLAKE3, ML-DSA-44, Kyber-768) without loading the full client surface:
+Subpath `@veya/sdk/pq` is also available if you only require post-quantum primitives (BLAKE3, ML-DSA-44, Kyber-768) without loading the full client surface:
 
 ```typescript
-import { VeyaClient, EvmAnchor } from "@veyanet/sdk";
-import * as pq from "@veyanet/sdk/pq";
+import { VeyaClient, EvmAnchor } from "@veya/sdk";
+import * as pq from "@veya/sdk/pq";
 ```
 
 ---
@@ -169,7 +166,7 @@ The `VeyaClient` class provides zero-configuration initialization with sensible 
 Configuration parameters resolve in strict precedence order: constructor options first, process environment variables second, and default network constants third:
 
 ```typescript
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 // 1. Zero-Config Instantiation (Uses production network defaults)
 const client = new VeyaClient();
@@ -201,13 +198,13 @@ const clientWithFleet = new VeyaClient({
 
 ## 🧩 Core Modules Overview
 
-The `@veyanet/sdk` is architected into focused, logically isolated modules reflecting VEYA's cryptographic and execution hierarchies. Each module provides strict typing and deterministic error boundaries.
+The `@veya/sdk` is architected into focused, logically isolated modules reflecting VEYA's cryptographic and execution hierarchies. Each module provides strict typing and deterministic error boundaries.
 
 ### 1. Post-Quantum Identity & Hashing
 Generate post-quantum keypairs, create Kyber-768 session keys, and compute BLAKE3-256 digests.
 
 ```typescript
-import { VeyaClient, pq } from "@veyanet/sdk";
+import { VeyaClient, pq } from "@veya/sdk";
 
 const client = new VeyaClient();
 
@@ -229,7 +226,7 @@ console.log("ML-DSA-44 Signature Valid:", isValid);
 Distribute execution tasks across validator nodes and verify that a 2-of-3 quorum reaches cryptographic hash agreement.
 
 ```typescript
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 const client = new VeyaClient();
 
@@ -242,12 +239,12 @@ console.log("Agreed Hash:", result.agreed_blake3_hash);
 console.log("Consensus Reached:", result.consensus_reached); // true if >= 2 nodes agree
 ```
 
-### 3. Sealed Execution (AES-256-GCM)
-Execute encrypted workloads against a sealed node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments. This is software sealed execution — not Intel SGX, not AWS Nitro, and not live FHE.
+### 3. Hardware-Attested Sealed Execution
+Execute encrypted, high-privacy workloads within a sealed node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments.
 
 ```typescript
 import { randomBytes } from "node:crypto";
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 const client = new VeyaClient();
 
@@ -267,7 +264,7 @@ console.log("Sealed Ciphertext Commitment:", sealedResult.sealed.blake3_commitme
 Submit commitments, register environments, set spending limits (in wei), and flag memory nullifiers directly on the protocol contract using `EvmAnchor`.
 
 ```typescript
-import { VeyaClient } from "@veyanet/sdk";
+import { VeyaClient } from "@veya/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
@@ -291,7 +288,7 @@ Below is a complete, runnable TypeScript script demonstrating end-to-end post-qu
 
 ```typescript
 import "dotenv/config";
-import { VeyaClient, pq, isRobinhoodTestnet } from "@veyanet/sdk";
+import { VeyaClient, pq, isRobinhoodTestnet } from "@veya/sdk";
 
 async function runQuickstart() {
   console.log("🚀 Initializing VEYA SDK...");
@@ -336,7 +333,7 @@ runQuickstart();
 
 ## 🔒 Advanced Cryptography Implementation
 
-The `@veyanet/sdk` abstracts client-side cryptographic operations for BLAKE3 integrity, ML-DSA attestation, and quantum-resistant session transport:
+The `@veya/sdk` abstracts complex cryptographic operations to guarantee client-side zero-knowledge boundaries and quantum resilience:
 
 ### 1. ML-DSA-44 Post-Quantum Identity (FIPS 204)
 *   **Algorithm**: Module-Lattice-Based Digital Signature Algorithm (ML-DSA-44).
@@ -361,13 +358,13 @@ The `@veyanet/sdk` abstracts client-side cryptographic operations for BLAKE3 int
 
 ## ⚠️ Error Handling & Reliability
 
-The `@veyanet/sdk` normalizes all network failures, RPC contract reverts, and invalid inputs into a typed `VeyaSdkError` instance.
+The `@veya/sdk` normalizes all network failures, RPC contract reverts, and invalid inputs into a typed `VeyaSdkError` instance.
 
 ### Error Classification & Checking
 The SDK exports the `isVeyaSdkError` type-guard utility and the `VEYA_ERROR_CODES` enum to facilitate precise recovery policies:
 
 ```typescript
-import { isVeyaSdkError, VEYA_ERROR_CODES } from "@veyanet/sdk";
+import { isVeyaSdkError, VEYA_ERROR_CODES } from "@veya/sdk";
 
 try {
   await client.evm?.recordSpend(agentUuid, spendAmountWei);
@@ -375,7 +372,7 @@ try {
   if (isVeyaSdkError(error)) {
     if (error.code === "CHAIN_MISMATCH") {
       console.error("RPC chain mismatch detected! Execution aborted for safety.");
-    } else if (error.code === "SPENDING_EXCEEDED") {
+    } else if (error.code === "SPENDING_LIMIT_EXCEEDED") {
       console.error("Environment spend limit reached in wei.");
     }
   } else {
@@ -440,7 +437,7 @@ The SDK consensus engine requires agreement from **2 of 3** validator nodes. If 
 ## 🤝 Contributing & Security Guidelines
 
 ### Contribution Standards
-We welcome contributions to `@veyanet/sdk`. To maintain security integrity, all Pull Requests are subject to code audits:
+We welcome contributions to `@veya/sdk`. To maintain security integrity, all Pull Requests are subject to code audits:
 *   **Zero-Knowledge Boundary Enforcement**: Any changes that log plaintext secrets, bypass client-side digests, or expose private key material will be rejected immediately.
 *   **Cryptographic Reviews**: Modifications to post-quantum key generation, BLAKE3 hashing, or AES parameters require core security review.
 
