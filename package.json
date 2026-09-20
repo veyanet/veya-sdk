@@ -1,6 +1,6 @@
 {
   "name": "@veyanet/sdk",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "VEYA TypeScript SDK for Robinhood Chain — PQ identity, AES-256-GCM sealed exec, 2-of-3 consensus, Veya.sol anchoring (testnet 46630)",
   "license": "MIT",
   "type": "module",
@@ -29,10 +29,7 @@
   "files": [
     "dist",
     "src",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "LICENSE"
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -41,8 +38,6 @@
     "doctor": "tsx scripts/doctor.ts",
     "live-rpc": "tsx scripts/live-rpc.ts",
     "example:quickstart": "tsx examples/quickstart.ts",
-    "example:verify": "tsx examples/verify-commitment.ts",
-    "example:phase2": "tsx examples/phase2-operator.ts",
     "example:pq": "tsx examples/pq-identity.ts",
     "example:consensus": "tsx examples/consensus.ts",
     "example:sealed": "tsx examples/sealed.ts"
