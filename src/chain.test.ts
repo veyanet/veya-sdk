@@ -9,7 +9,7 @@ import {
   walletAddChainParams,
 } from "./chain.js";
 import { VEYA_ABI, VEYA_CONTRACT_ADDRESS, abiFunctionNames } from "./abi/index.js";
-import { VeyaSdkError } from "./errors/veya-error.js";
+import { VeyaSdkError, fromAnchorRevert, NO_TESTNET_TOKENS } from "./errors/veya-error.js";
 
 describe("Robinhood Chain defaults", () => {
   it("pins testnet chain id 46630 and Veya.sol", () => {
@@ -17,6 +17,7 @@ describe("Robinhood Chain defaults", () => {
     expect(ROBINHOOD_TESTNET_CHAIN_ID).toBe(46630);
     expect(ROBINHOOD_TESTNET.rpcUrl).toContain("robinhood.com");
     expect(ROBINHOOD_TESTNET.explorerUrl).toContain("explorer.testnet.chain.robinhood.com");
+    expect(ROBINHOOD_TESTNET.faucetUrl).toBe("https://faucet.testnet.chain.robinhood.com/");
     expect(ROBINHOOD_TESTNET.contractAddress).toBe("0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84");
     expect(VEYA_CONTRACT_ADDRESS).toBe(ROBINHOOD_TESTNET.contractAddress);
     expect(isRobinhoodTestnet(46630)).toBe(true);
@@ -42,13 +43,18 @@ describe("Robinhood Chain defaults", () => {
     expect(() => explorerTxUrl("0x1234")).toThrow(VeyaSdkError);
   });
 
+  it("maps unfunded payer errors to the exact tokens sentence", () => {
+    expect(fromAnchorRevert(new Error("insufficient funds for gas")).message).toBe(NO_TESTNET_TOKENS);
+    expect(fromAnchorRevert(new Error("insufficient funds for gas")).code).toBe("UNFUNDED_PAYER");
+  });
+
   it("wallet_addEthereumChain matches testnet", () => {
     const params = walletAddChainParams();
     expect(params.chainId).toBe("0xb636");
     expect(params.rpcUrls[0]).toBe(ROBINHOOD_TESTNET.rpcUrl);
   });
 
-  it("ABI includes Veya.sol write functions (camelCase, not snake_case)", () => {
+  it("ABI includes Veya.sol write functions (camelCase, not Solana snake_case)", () => {
     const names = new Set(abiFunctionNames());
     for (const fn of INSTRUCTION_NAMES) {
       expect(names.has(fn), `missing ${fn}`).toBe(true);
