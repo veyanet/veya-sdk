@@ -8,6 +8,31 @@ This package settles on **Robinhood Chain** via `Veya.sol` (testnet chain id `46
 
 ---
 
+## [1.2.2] — 2026-09-20
+
+### Added
+- Preflight unfunded-payer check on every `EvmAnchor` write (`UNFUNDED_PAYER`).
+- Exact operator-facing copy via `NO_TESTNET_TOKENS`: `You don't have testnet tokens. Please get them for the transaction.`
+- `isUnfundedPayerError` helper so MCP / product UI can map ethers “insufficient funds” the same way.
+- `ROBINHOOD_TESTNET.faucetUrl` and exported `ROBINHOOD_TESTNET_FAUCET_URL` (`https://faucet.testnet.chain.robinhood.com/`).
+- Chain tests covering faucet URL + pin exports.
+
+### Changed
+- Package identity / publish name aligned to **`@veyanet/sdk@1.2.2`** (tree had drifted to stale `@veya/sdk` / `1.0.0`; `SDK_NAME` / `SDK_VERSION` / `SDK_SURFACE` match npm).
+- `EvmAnchor.send` takes a lazy tx factory so balance is checked **before** the wallet prompt; zero-balance wallets never open a doomed signature flow.
+- `fromAnchorRevert` normalizes insufficient-funds / intrinsic-gas failures onto `UNFUNDED_PAYER` + `NO_TESTNET_TOKENS` (same sentence as MCP).
+- Public exports re-export faucet URL, `isUnfundedPayerError`, and `NO_TESTNET_TOKENS` from the package root.
+- Docs retarget contract / pin links to the **vendored** `src/abi/Veya.json` + `src/chain.ts` (no out-of-repo `contracts/Veya.sol` or `deployments/testnet.json` dependency for strangers).
+- Docs refreshed across architecture, deployment, quickstart, verification, network pin, PQ, CLI, SDK guides, and ops runbooks for Robinhood testnet **46630**.
+- `examples/quickstart.ts`, `scripts/doctor.ts`, and `scripts/live-rpc.ts` refreshed for the published `@veyanet/sdk` surface.
+- README / SECURITY / CONTRIBUTING scrubbed for Robinhood settlement honesty (user-paid gas, AES-256-GCM sealed exec, no TEE theater).
+- `.gitignore` ignores local `.npmrc` so publish auth tokens are never committed.
+
+### Fixed
+- Unfunded payers fail closed with a stable, copy-pasteable error instead of raw ethers `[object Object]` / insufficient-funds noise on write paths.
+
+---
+
 ## [1.2.0] — 2026-09-07
 
 ### Added
