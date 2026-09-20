@@ -1,7 +1,8 @@
 /**
  * Minimal SDK usage — hash locally, ping chain, optional write.
  *
- *   cd robinhood/sdk && npm install && npx tsx examples/quickstart.ts
+ *   cd . && npm install && npx tsx examples/quickstart.ts
+ *   (clone https://github.com/veyanet/veya-sdk or use the published package)
  *
  * On-chain writes need VEYA_DEPLOYER_PRIVATE_KEY. Without a key this still
  * pings Robinhood testnet and prints honesty surface (user path).
