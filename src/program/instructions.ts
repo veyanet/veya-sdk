@@ -20,20 +20,10 @@ export const INSTRUCTION_NAMES = [
 
 export type InstructionName = (typeof INSTRUCTION_NAMES)[number];
 
-/**
- * Matches `enum EnvironmentType` in Veya.sol:
- * Execution = 0, SecureEnclave = 1, Governance = 2.
- *
- * Legacy aliases Isolated/Shared kept for older call sites (same numeric values).
- */
 export const ENVIRONMENT_TYPES = {
-  Execution: 0,
-  SecureEnclave: 1,
-  Governance: 2,
-  /** @deprecated Use Execution — same value as Veya.sol Execution */
   Isolated: 0,
-  /** @deprecated Use SecureEnclave — same value as Veya.sol SecureEnclave */
   Shared: 1,
+  Governance: 2,
 } as const;
 
 export type EnvironmentTypeName = keyof typeof ENVIRONMENT_TYPES;
