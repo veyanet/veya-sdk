@@ -1,6 +1,6 @@
 /**
  * Per-agent spending caps — enforced before consensus / sealed execution.
- * Amounts are wei on Robinhood Chain (native ETH).
+ * Amounts are wei on Robinhood Chain (native ETH)
  */
 
 import { VeyaSdkError } from "../errors/veya-error.js";
@@ -45,11 +45,8 @@ export function getSpendingLimit(
   return limits.get(key(environmentId, agentId));
 }
 
-/**
- * In-process spending ledger (not Veya.sol).
- * On-chain spend is `EvmAnchor.recordSpend(agentUuid, amount)`.
- */
-export function recordLocalSpend(
+/** Returns true if spend is allowed; throws if over cap. */
+export function recordSpend(
   environmentId: string,
   agentId: string,
   amount: bigint | number,
@@ -77,9 +74,6 @@ export function recordLocalSpend(
   limits.set(k, limit);
   return true;
 }
-
-/** @deprecated Use recordLocalSpend — this is in-memory, not EvmAnchor.recordSpend */
-export const recordSpend = recordLocalSpend;
 
 export function checkSpendAllowed(
   environmentId: string,
