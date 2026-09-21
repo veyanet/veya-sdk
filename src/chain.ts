@@ -11,7 +11,7 @@ export const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
 
 export const ROBINHOOD_TESTNET = {
   chainId: ROBINHOOD_TESTNET_CHAIN_ID,
-  chainIdHex: "0xb636",
+  chainIdHex: "0xb626",
   name: "Robinhood Chain Testnet",
   rpcUrl: "https://rpc.testnet.chain.robinhood.com",
   explorerUrl: "https://explorer.testnet.chain.robinhood.com",
