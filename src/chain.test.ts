@@ -50,11 +50,12 @@ describe("Robinhood Chain defaults", () => {
 
   it("wallet_addEthereumChain matches testnet", () => {
     const params = walletAddChainParams();
-    expect(params.chainId).toBe("0xb636");
+    expect(params.chainId).toBe("0xb626");
+    expect(params.chainId).toBe(`0x${(46630).toString(16)}`);
     expect(params.rpcUrls[0]).toBe(ROBINHOOD_TESTNET.rpcUrl);
   });
 
-  it("ABI includes Veya.sol write functions (camelCase, not Solana snake_case)", () => {
+  it("ABI includes Veya.sol camelCase write functions", () => {
     const names = new Set(abiFunctionNames());
     for (const fn of INSTRUCTION_NAMES) {
       expect(names.has(fn), `missing ${fn}`).toBe(true);
