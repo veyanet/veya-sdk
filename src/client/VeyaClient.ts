@@ -7,6 +7,13 @@ import { protectedExec } from "../sealed/protectedExec.js";
 import { requireVerifiedSeal } from "../sealed/types.js";
 import { parseProofFromTransaction } from "./receipts.js";
 import { EvmAnchor } from "./evm.js";
+import {
+  createReadContract,
+  readAgentRecord,
+  readCommitment,
+  readEnvironmentRecord,
+  verifyCommitmentOnChain as verifyCommitmentReceipt,
+} from "./reads.js";
 
 /**
  * High-level VEYA SDK client — local PQ crypto, Robinhood Chain anchoring, consensus, sealed exec.
@@ -97,6 +104,44 @@ export class VeyaClient {
       txHash,
       this.config.contractAddress,
       this.config.explorerUrl,
+    );
+  }
+
+  private readContract() {
+    return createReadContract(this.config.rpcUrl, this.config.contractAddress);
+  }
+
+  /** eth_call commitments(bytes32). True only when the digest is stored. */
+  async commitmentExists(digestHex: string): Promise<boolean> {
+    const row = await readCommitment(this.readContract(), digestHex);
+    return row.exists;
+  }
+
+  /** eth_call commitments(bytes32). */
+  async getCommitment(digestHex: string) {
+    return readCommitment(this.readContract(), digestHex);
+  }
+
+  /** Read an environment row. exists is false when the UUID was never registered. */
+  async readEnvironment(environmentUuid: Uint8Array) {
+    return readEnvironmentRecord(this.readContract(), environmentUuid);
+  }
+
+  /** Read an agent row. exists is false when the UUID was never registered. */
+  async readAgent(agentUuid: Uint8Array) {
+    return readAgentRecord(this.readContract(), agentUuid);
+  }
+
+  /**
+   * Parse Veya.sol logs from a receipt and eth_call commitments(digest)
+   * for each CommitmentStored event. No payer key.
+   */
+  async verifyCommitmentOnChain(txHash: string) {
+    return verifyCommitmentReceipt(
+      this.config.rpcUrl,
+      this.config.contractAddress,
+      this.config.explorerUrl,
+      txHash,
     );
   }
 }
