@@ -8,7 +8,7 @@
  */
 
 export const SDK_NAME = "@veyanet/sdk";
-export const SDK_VERSION = "1.2.2";
+export const SDK_VERSION = "1.2.3";
 
 /** What this package is, in one object operators can log from doctor scripts. */
 export const SDK_SURFACE = {
@@ -20,6 +20,9 @@ export const SDK_SURFACE = {
   identity: "ML-DSA-44",
   kem: "Kyber-768",
   commitment: "BLAKE3-256",
+  sealed: "AES-256-GCM",
+  notFhe: true,
+  notMainnet: true,
 } as const;
 
 export { VeyaClient } from "./client/VeyaClient.js";
