@@ -20,17 +20,17 @@
 
 The **VEYA Protocol** is a decentralized, cryptographically shielded execution layer engineered for post-quantum resilient autonomous agent fleets on **Robinhood Chain**. Traditional LLM agent frameworks suffer from severe structural vulnerabilities: because agents require private execution contexts—such as API integration credentials, proprietary system prompts, treasury authority, and policy rules—running them in standard host runtimes exposes sensitive state in plaintext to host operators, database administrators, and network intermediaries.
 
-VEYA solves this security gap by establishing client-side cryptographic boundaries and post-quantum attestation primitives. Sensitive agent workloads are protected through local post-quantum key generation (**ML-DSA-44**), quantum-resistant session negotiation (**Kyber-768**), high-throughput cryptographic digests (**BLAKE3-256**), hardware-attested sealed execution (**AES-256-GCM**), and **2-of-3 multi-node consensus**.
+VEYA solves this security gap by establishing client-side cryptographic boundaries and post-quantum attestation primitives. Sensitive agent workloads are protected through local post-quantum key generation (**ML-DSA-44**), quantum-resistant session negotiation (**Kyber-768**), high-throughput cryptographic digests (**BLAKE3-256**), sealed execution with **AES-256-GCM** (software sealed-node), and **2-of-3 multi-node consensus**.
 
 ### The VEYA SDK
 
-The `@veya/sdk` is the canonical, type-safe developer interface designed to initialize, authenticate, and manage bounded agent workloads under VEYA's cryptographic boundaries. The SDK operates as an in-process gatekeeper, executing key derivation, state hashing, zero-knowledge memory validation, and signature verification before any transaction payload or commitment digest is dispatched to the VEYA API or anchored on-chain.
+The `@veya/sdk` is the canonical, type-safe developer interface designed to initialize, authenticate, and manage bounded agent workloads under VEYA's cryptographic boundaries. The SDK operates as an in-process gatekeeper, executing key derivation, state hashing, and signature verification before any transaction payload or commitment digest is dispatched to the VEYA API or anchored on-chain.
 
 By integrating `@veya/sdk` into your agentic runtime, you enable the following core capabilities:
 *   **Post-Quantum Identity & Transport**: Generate FIPS 204 ML-DSA-44 keypairs locally and establish FIPS 203 Kyber-768 session keys for quantum-resistant data exchange.
 *   **High-Speed BLAKE3-256 Digesting**: Compute deterministic 32-byte cryptographic commitments for execution payloads, agent memories, and pubkey fingerprints.
 *   **Decentralized 2-of-3 Consensus**: Orchestrate tasks across independent, cryptographically attested validator nodes to verify execution outputs before committing state transitions.
-*   **Hardware-Attested Sealed Execution**: Execute confidential tasks within isolated sealed-node environments utilizing AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
+*   **Sealed Execution (AES-256-GCM)**: Execute confidential tasks within a software sealed-node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
 *   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), and tool permissions to the protocol contract via `EvmAnchor`.
 
 ---
@@ -44,7 +44,7 @@ By integrating `@veya/sdk` into your agentic runtime, you enable the following c
 5. [Core Modules Overview](#-core-modules-overview)
     * [Post-Quantum Identity & Hashing](#1-post-quantum-identity--hashing)
     * [Decentralized 2-of-3 Consensus](#2-decentralized-2-of-3-consensus)
-    * [Hardware-Attested Sealed Execution](#3-hardware-attested-sealed-execution)
+    * [Sealed Execution (AES-256-GCM)](#3-sealed-execution-aes-256-gcm)
     * [On-Chain Attestation & EVM Anchoring](#4-on-chain-attestation--evm-anchoring)
 6. [Comprehensive Quickstart Script](#-comprehensive-quickstart-script)
 7. [Advanced Cryptography Implementation](#-advanced-cryptography-implementation)
@@ -239,7 +239,7 @@ console.log("Agreed Hash:", result.agreed_blake3_hash);
 console.log("Consensus Reached:", result.consensus_reached); // true if >= 2 nodes agree
 ```
 
-### 3. Hardware-Attested Sealed Execution
+### 3. Sealed Execution (AES-256-GCM)
 Execute encrypted, high-privacy workloads within a sealed node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments.
 
 ```typescript
