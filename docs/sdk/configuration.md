@@ -50,7 +50,7 @@ Readers are expected to be comfortable with ethers v6 providers, EVM chain ids, 
 
 The following assumptions are baked into defaults and should be treated as invariants unless an operator explicitly overrides them:
 
-- Settlement happens on Robinhood Chain, not on a Solana cluster and not through a brokerage API.
+- Settlement happens on Robinhood Chain.
 - `Veya.sol` is a protocol contract that stores environment, agent, and commitment state. It is not an ERC-20.
 - Spending caps are denominated in wei (18 decimals for native ETH on Robinhood Chain).
 - Contract function names in `INSTRUCTION_NAMES` are camelCase (`registerEnvironment`, not `register_environment`).
@@ -64,7 +64,7 @@ If any of those assumptions is violated at runtime, writes must fail closed. The
 
 | Term | Meaning in this SDK |
 |------|---------------------|
-| Robinhood Chain | EVM network used for VEYA settlement. Testnet chain id is `46630` (`0xb636`). |
+| Robinhood Chain | EVM network used for VEYA settlement. Testnet chain id is `46630` (`0xb626`). |
 | `Veya.sol` | Protocol contract storing environments, agents, attestations, commitments, spending, policy, nullifiers, and sealed chunks. |
 | wei | Native currency subunit. One ETH is `10^18` wei. All on-chain spend amounts use wei. |
 | `resolveConfig` | Pure merge of constructor options, `process.env`, and `ROBINHOOD_TESTNET` defaults. |
@@ -155,7 +155,7 @@ Every field is optional at the type level. Requiredness is a runtime property of
 | `validatorNodes` | `string[]` | `runConsensus()` | Nodes sign BLAKE3 digests with ML-DSA-44 |
 | `sealedNodeUrl` | `string` | `protectedExecute()` | Sealed boundary uses AES-256-GCM + BLAKE3 |
 
-`payerPrivateKey` is a hex string, typically `0x`-prefixed 32-byte secp256k1 material. It is not a 64-byte Solana secret key array. Loading a Solana keypair JSON into this field will produce an ethers wallet that cannot sign Robinhood Chain transactions correctly.
+`payerPrivateKey` is a hex string, typically `0x`-prefixed 32-byte secp256k1 material. A JSON byte-array key will not sign Robinhood Chain transactions.
 
 `contractAddress` is a 20-byte EVM address. The testnet deployment is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. Checksums should be preserved when logging, but ethers accepts either mixed-case EIP-55 or lowercase.
 
@@ -240,7 +240,7 @@ export const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
 
 export const ROBINHOOD_TESTNET = {
   chainId: ROBINHOOD_TESTNET_CHAIN_ID,
-  chainIdHex: "0xb636",
+  chainIdHex: "0xb626",
   name: "Robinhood Chain Testnet",
   rpcUrl: "https://rpc.testnet.chain.robinhood.com",
   explorerUrl: "https://explorer.testnet.chain.robinhood.com",
@@ -261,7 +261,7 @@ Helper functions live beside the constant:
 | `explorerAddressUrl(address, base?)` | Builds `{explorer}/address/{address}`. |
 | `isRobinhoodTestnet(chainId)` | Returns true iff `BigInt(chainId) === 46630n`. |
 
-Wallet connection flows that add Robinhood Chain to a browser wallet should use `chainIdHex: "0xb636"` together with the RPC and explorer URLs above. The SDK itself does not call `wallet_addEthereumChain`; it talks JSON-RPC through ethers.
+Wallet connection flows that add Robinhood Chain to a browser wallet should use `chainIdHex: "0xb626"` together with the RPC and explorer URLs above. The SDK itself does not call `wallet_addEthereumChain`; it talks JSON-RPC through ethers.
 
 Native currency decimals are 18. Converting a human amount such as `0.01 ETH` to an on-chain spend uses `ethers.parseEther("0.01")`, which yields wei. Do not pass lamports, USDC atomic units, or floating-point numbers into `initSpendingLimit` or `recordSpend`.
 
@@ -348,8 +348,6 @@ The wallet is an `ethers.Wallet` bound to `ethers.JsonRpcProvider`. The provider
 | `VEYA_VALIDATOR_NODES` | `validatorNodes` | `http://a:7701,http://b:7702,http://c:7703` | Comma-separated |
 | `VEYA_SEALED_NODE_URL` | `sealedNodeUrl` | `http://127.0.0.1:7800` | TLS URL in production |
 | `VEYA_DEPLOYER_PRIVATE_KEY` | `payerPrivateKey` | `0xabc...` 32-byte hex | Never commit |
-
-There is no `SOLANA_RPC_URL` and no `VEYA_PROGRAM_ID` in this package. Those names belong to a different settlement path and will be ignored if exported in the same shell.
 
 ### Shell export examples
 
@@ -599,7 +597,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case leftovers from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
-Environment variable names listed in this document are the compatibility surface for operators. Introducing aliases for old Solana-oriented names is out of scope; those variables are not read.
+Environment variable names listed in this document are the names this package reads.
 
 ---
 
@@ -616,7 +614,7 @@ Environment variable names listed in this document are the compatibility surface
 | `validatorNodes` has one URL | Env parse error | Comma-separate without quoting issues |
 | Spend reverts `SpendingLimitExceeded` | Amount not in wei, or cap too low | Use wei; `PolicyAgentConfig.maxWeiPerAction` |
 | Explorer link 404 | Wrong explorer origin or missing `0x` | Use `explorerTxUrl` from `src/chain.ts` |
-| Wallet cannot parse key | Solana JSON array passed as payer | Use hex secp256k1, not a 64-byte array |
+| Wallet cannot parse key | JSON byte array passed as payer | Use hex secp256k1 |
 
 ### Diagnostic script
 
