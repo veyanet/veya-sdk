@@ -219,7 +219,7 @@ sequenceDiagram
 
     App->>EA: registerEnvironment(...)
     EA->>RPC: eth_chainId
-    RPC-->>EA: 0xb636 (46630)
+    RPC-->>EA: 0xb626 (46630)
     EA->>RPC: eth_sendRawTransaction
     RPC->>C: function call
     C-->>RPC: logs / revert
@@ -227,7 +227,7 @@ sequenceDiagram
     EA-->>App: 0x...
 ```
 
-`tx.wait()` uses ethers default confirmation (one block). Operators who need a deeper confirmation policy should wait additional blocks using `provider.waitForTransaction` after the hash returns. The SDK does not expose a commitment-level knob analogous to Solana `confirmed` vs `finalized`; EVM finality is a function of the Robinhood Chain consensus rules.
+`tx.wait()` uses ethers default confirmation (one block). Operators who need a deeper confirmation policy should wait additional blocks using `provider.waitForTransaction` after the hash returns. Finality follows the Robinhood Chain consensus rules.
 
 If the contract reverts, ethers throws and `send` does not return a hash. Map revert data with `fromAnchorRevert` in `src/errors/veya-error.ts` when typed error codes are required.
 
@@ -501,7 +501,7 @@ Read methods such as `getEnvironment` are not in the catalog because they do not
 | `Nullifier` | `bytes16` memoryId |
 | `SealedState` | `keccak256(abi.encodePacked(environmentUuid, stateId, chunkIndex))` |
 
-Do not attempt to derive Solana-style seeds. When an explorer or indexer needs to find a tool policy, hash the packed agent UUID and tool name with keccak256, not BLAKE3. BLAKE3 is the commitment hash for payloads; keccak256 is only the EVM mapping key.
+When an explorer or indexer needs to find a tool policy, hash the packed agent UUID and tool name with keccak256, not BLAKE3. BLAKE3 is the commitment hash for payloads; keccak256 is only the EVM mapping key.
 
 ---
 
@@ -617,7 +617,7 @@ await client.evm!.initSpendingLimit(
 |---------|--------------|-----|
 | Expected chain id 46630 | RPC on another EVM | Use `https://rpc.testnet.chain.robinhood.com` |
 | `payerPrivateKey required` | Constructed `VeyaClient` without a key | Set `VEYA_DEPLOYER_PRIVATE_KEY` |
-| Invalid private key | Solana JSON array supplied | Use hex secp256k1 |
+| Invalid private key | JSON byte array supplied | Use hex secp256k1 |
 | Environment explorer 404 | Hash missing `0x` and helper bypassed | Use `explorerFor` / `explorerTxUrl` |
 | Revert `SpendingLimitExceeded` | Units not wei | `ethers.parseEther` / `maxWeiPerAction` |
 | Revert `CommitmentAlreadyExists` | Duplicate digest | Skip; already anchored |
