@@ -2,7 +2,7 @@
 
 **Complete TypeScript type catalog for `@veyanet/sdk` on Robinhood Chain.**
 
-Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**: not Solana account layouts.
+Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**.
 
 Package: `@veyanet/sdk` at `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`.
 
@@ -89,7 +89,7 @@ flowchart TB
 | Name | Value | Location | Description |
 |------|-------|----------|-------------|
 | `ROBINHOOD_TESTNET_CHAIN_ID` | `46630` | `chain.ts` | Decimal chain id |
-| `chainIdHex` | `0xb636` | `ROBINHOOD_TESTNET` | Hex chain id |
+| `chainIdHex` | `0xb626` | `ROBINHOOD_TESTNET` | Hex chain id |
 | `VEYA_CONTRACT_ADDRESS` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | `abi/index.ts` | Protocol contract |
 | `MAX_MLDSA_SIG_LEN` | `4627` | `Veya.sol` | Max Dilithium sig bytes stored |
 | `MAX_SEALED_CHUNK` | `8192` | `Veya.sol` | Max ciphertext per chunk |
@@ -114,7 +114,7 @@ declare const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
 
 declare const ROBINHOOD_TESTNET: {
   readonly chainId: 46630;
-  readonly chainIdHex: "0xb636";
+  readonly chainIdHex: "0xb626";
   readonly name: "Robinhood Chain Testnet";
   readonly rpcUrl: "https://rpc.testnet.chain.robinhood.com";
   readonly explorerUrl: "https://explorer.testnet.chain.robinhood.com";
@@ -317,7 +317,7 @@ sequenceDiagram
 
     App->>EA: registerEnvironment(...)
     EA->>RPC: eth_chainId
-    RPC-->>EA: 0xb636
+    RPC-->>EA: 0xb626
     EA->>C: registerEnvironment calldata
     C-->>RPC: receipt
     RPC-->>EA: hash
