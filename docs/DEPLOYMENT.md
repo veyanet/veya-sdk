@@ -9,7 +9,7 @@ VEYA on Robinhood Chain requires **no hosted API server**. Operators run Node (`
 | Field | Live testnet value |
 |-------|-------------------|
 | **Network** | Robinhood Chain Testnet |
-| **chainId** | `46630` (`0xb636`) |
+| **chainId** | `46630` (`0xb626`) |
 | **Status** | `deployed` |
 | **RPC** | `https://rpc.testnet.chain.robinhood.com` |
 | **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
@@ -111,7 +111,7 @@ npm test
 npm run build
 ```
 
-You do **not** need solana-cli, Anchor, or a BPF toolchain. You do **not** need an ERC-20 deploy. If you rebuild Solidity, use the toolchain in `Veya Protocol` (Hardhat / Foundry / ethers deploy script there) and then refresh `src/abi/Veya.json` in this package.
+Consuming this package needs Node. You do **not** need an ERC-20 deploy. If you rebuild Solidity, use the toolchain in `Veya Protocol` (Hardhat / Foundry / ethers deploy script there) and then refresh `src/abi/Veya.json` in this package.
 
 ---
 
@@ -221,7 +221,7 @@ Verify connectivity:
 curl -s https://rpc.testnet.chain.robinhood.com \
   -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}'
-# expect 0xb636
+# expect 0xb626
 ```
 
 `scripts/doctor.ts` and `scripts/live-rpc.ts` wrap this check for operators. See [CLI.md](./CLI.md).
@@ -550,7 +550,7 @@ This JSON file is **not** the chain. Nullifiers on-chain (`flagMemoryNullifier`)
 
 | Signal | Source | Alert threshold |
 |--------|--------|-----------------|
-| RPC `eth_chainId` | `scripts/live-rpc.ts` | Not `0xb636` |
+| RPC `eth_chainId` | `scripts/live-rpc.ts` | Not `0xb626` |
 | Contract code | `eth_getCode` | Empty or unexpected size drop |
 | Node uptime | `POST /execute` | Any validator down > 60s |
 | Quorum failures | `consensus_reached: false` | 3 consecutive failures |
@@ -647,7 +647,7 @@ Spending-limit **application** amounts (treasury caps) are independent of **gas*
 ### Consume live contract
 
 - [ ] `ROBINHOOD_RPC_URL` reachable
-- [ ] `eth_chainId` returns `0xb636`
+- [ ] `eth_chainId` returns `0xb626`
 - [ ] `eth_getCode` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` is non-empty
 - [ ] `npx tsx scripts/doctor.ts` exits 0
 - [ ] `npx tsx scripts/live-rpc.ts` exits 0
