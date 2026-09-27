@@ -273,7 +273,7 @@ npx tsx scripts/doctor.ts
 
 1. **Node version**: `process.versions.node` major ≥ 20
 2. **Resolved config**: `resolveConfig()`; print rpc, chainId, contract, explorer, validator list, sealed URL; redact payer key (present/absent only)
-3. **`eth_chainId`**: JSON-RPC against `cfg.rpcUrl`; must equal `BigInt(cfg.chainId)` (default `46630` / `0xb636`)
+3. **`eth_chainId`**: JSON-RPC against `cfg.rpcUrl`; must equal `BigInt(cfg.chainId)` (default `46630` / `0xb626`)
 4. **`eth_getCode`**: at `cfg.contractAddress`; must be non-empty bytecode (not `0x`)
 5. **Validator origins**: optional TCP/HTTP probe of each `validatorNodes` URL (warn if down; do not fail doctor if you only needed RPC)
 6. **Sealed origin**: optional probe of `sealedNodeUrl` (same policy)
@@ -328,7 +328,7 @@ npx tsx scripts/live-rpc.ts
 
 | JSON-RPC method | Params | Expect |
 |-----------------|--------|--------|
-| `eth_chainId` | `[]` | `0xb636` |
+| `eth_chainId` | `[]` | `0xb626` |
 | `eth_blockNumber` | `[]` | advancing hex |
 | `eth_getCode` | `[VEYA_CONTRACT_ADDRESS, "latest"]` | bytecode |
 | `eth_call` (optional) | `MAX_MLDSA_SIG_LEN()` | `4627` |
@@ -580,8 +580,6 @@ npx tsx scripts/live-rpc.ts || exit 1
 | `VEYA_DEPLOYER_PRIVATE_KEY` | `VeyaClient` / `EvmAnchor` | Payer hex key |
 | `VEYA_VALIDATOR_NODES` | `resolveConfig` | Comma-separated origins |
 | `VEYA_SEALED_NODE_URL` | `resolveConfig` | Sealed origin |
-
-The SDK does not read `SOLANA_*` variables. Setting them has no effect.
 
 Copy values from [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration). Never commit the payer key.
 
