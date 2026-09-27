@@ -147,7 +147,7 @@ const { environmentTx, memoTx, explorer } = await client.registerPqOnchain();
 console.log(explorer.memo);
 ```
 
-`registerPqOnchain` is a convenience that generates an ML-DSA identity, calls `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint. The return field `memoTx` is that commitment transaction: it is **not** an SPL Memo and not a Solana signature.
+`registerPqOnchain` is a convenience that generates an ML-DSA identity, calls `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint. The return field `memoTx` is that `storeCommitment` transaction.
 
 `EvmAnchor` refuses to send if the RPC `eth_chainId` is not `46630` (or the `chainId` you passed in).
 
@@ -516,7 +516,7 @@ npm test
 npm run lint
 ```
 
-Unit tests pin chain id `46630`, explorer host, `VEYA_CONTRACT_ADDRESS`, ABI camelCase function names, and the absence of Solana-style `register_environment`. PQ tests round-trip ML-DSA sign/verify and BLAKE3.
+Unit tests pin chain id `46630`, explorer host, `VEYA_CONTRACT_ADDRESS`, and ABI camelCase function names such as `registerEnvironment`. PQ tests round-trip ML-DSA sign/verify and BLAKE3.
 
 Live RPC writes are **not** part of unit tests. They need a funded key. The hosted tree covers them with `https://api.veyanet.tech/scripts/live-ship-check.ts`.
 
@@ -595,7 +595,7 @@ export VEYA_SEALED_NODE_URL="http://127.0.0.1:7800"
 # export VEYA_DEPLOYER_PRIVATE_KEY=0x...   # funded; local only
 ```
 
-There is no Solana cluster variable, no program id, and no memo program id in this package.
+Chain configuration in this package is Robinhood Chain id `46630`, the `Veya.sol` address, and the RPC URL.
 
 ---
 
@@ -686,7 +686,7 @@ Use this when bringing a fresh machine online.
 |-------|---------------|
 | Validators | Three `/execute` responses, threshold 2 still reachable |
 | Sealed-node | `POST /protected` not connection-refused |
-| RPC | `eth_chainId` → `0xb636` (46630) |
+| RPC | `eth_chainId` → `0xb626` (46630) |
 | Contract | `eth_getCode` at Veya.sol is non-empty |
 | Relayer (if API used) | ETH balance covers several `storeCommitment` writes |
 
