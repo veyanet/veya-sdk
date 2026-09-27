@@ -12,7 +12,7 @@ This document contains the low-level network details and contract specifications
 | Parameter | Value |
 |-----------|-------|
 | **Network Name** | Robinhood Chain Testnet |
-| **Chain ID** | `46630` (`0xb636`) |
+| **Chain ID** | `46630` (`0xb626`) |
 | **RPC Endpoint** | `https://rpc.testnet.chain.robinhood.com` |
 | **Block Explorer** | `https://explorer.testnet.chain.robinhood.com` |
 | **Protocol Contract** | [`0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84) |
