@@ -78,7 +78,7 @@ flowchart LR
     D --> E["Off-Chain PQ Verification\n@veyanet/sdk pq module"]
 ```
 
-The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM). There is no Solana client in this package, no program-derived addresses, and no SPL Memo companion path.
+The SDK is TypeScript, ethers v6, Node 20+. Settlement is Robinhood Chain (EVM) through `Veya.sol`.
 
 ---
 
@@ -89,7 +89,7 @@ PQ anchoring is **live on Robinhood Chain testnet**. The protocol contract is de
 | Field | Value |
 |-------|-------|
 | **Network** | Robinhood Chain Testnet |
-| **Chain ID** | `46630` (`0xb636`) |
+| **Chain ID** | `46630` (`0xb626`) |
 | **RPC** | `https://rpc.testnet.chain.robinhood.com` |
 | **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
 | **Protocol contract** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
@@ -429,7 +429,7 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `client/evm.ts` | EVM integration
 
-`EvmAnchor` composes an ethers `JsonRpcProvider`, `Wallet`, and `Contract`. It does **not** pin `staticNetwork` so `getNetwork()` always queries `eth_chainId`. Methods map 1:1 to Solidity functions. `registerPqIdentity` is a convenience: ML-DSA keygen, `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint (named `memoTx` in the return object because it is the digest-anchor companion, implemented as `storeCommitment`, not a Solana memo program).
+`EvmAnchor` composes an ethers `JsonRpcProvider`, `Wallet`, and `Contract`. It does **not** pin `staticNetwork` so `getNetwork()` always queries `eth_chainId`. Methods map 1:1 to Solidity functions. `registerPqIdentity` is a convenience: ML-DSA keygen, `registerEnvironment`, then `storeCommitment` of the pubkey fingerprint (named `memoTx` in the return object because it is the digest-anchor companion, implemented as `storeCommitment`).
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
@@ -962,7 +962,7 @@ Procedures: [VERIFICATION.md](./VERIFICATION.md)
 | Cross-environment policy | Composite keys | Not in v1 |
 | TFHE homomorphic ops | sealed-node | Not claimed as live |
 
-Do not invent a token address, a second protocol contract, or a Solana companion program as an extension of this SDK.
+Do not invent a token address or a second protocol contract as an extension of this SDK.
 
 ---
 
