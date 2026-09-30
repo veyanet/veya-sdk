@@ -1,6 +1,6 @@
 # SDK Post-Quantum Cryptography
 
-**ML-DSA-44, Kyber-768, and BLAKE3 primitives for `@veya/sdk`: TypeScript surface aligned with the sealed and validator node identities.**
+**ML-DSA-44, Kyber-768, and BLAKE3 primitives for `@veyanet/sdk`: TypeScript surface aligned with the sealed and validator node identities.**
 
 The `src/pq` module is the TypeScript surface for post-quantum identity, session transport, and commitments. VEYA on Robinhood Chain is **PQ-first**: no SHA-256 on new code paths. `Veya.sol` stores **hashes and signature bytes**; verification runs off-chain in this module. Implementations use `@noble/post-quantum` for ML-DSA-44 and ML-KEM-768, and `hash-wasm` for BLAKE3.
 
@@ -122,12 +122,12 @@ src/pq/
 Package exports:
 
 ```typescript
-import * as pq from "@veya/sdk/pq";
-import { pq } from "@veya/sdk";
+import * as pq from "@veyanet/sdk/pq";
+import { pq } from "@veyanet/sdk";
 
-import { generatePQIdentity, signPQ, verifyPQ } from "@veya/sdk/pq";
-import { hashBlake3, hashBlake3Bytes } from "@veya/sdk/pq";
-import { generateKyberKeys, encapsulateKyber, decapsulateKyber } from "@veya/sdk/pq";
+import { generatePQIdentity, signPQ, verifyPQ } from "@veyanet/sdk/pq";
+import { hashBlake3, hashBlake3Bytes } from "@veyanet/sdk/pq";
+import { generateKyberKeys, encapsulateKyber, decapsulateKyber } from "@veyanet/sdk/pq";
 ```
 
 | File | Dependency | Purpose |
@@ -153,7 +153,7 @@ The comment in source states this parameter set matches Rust `pqcrypto-dilithium
 ### generatePQIdentity
 
 ```typescript
-import * as pq from "@veya/sdk/pq";
+import * as pq from "@veyanet/sdk/pq";
 
 const { publicKey, privateKey } = await pq.generatePQIdentity();
 ```

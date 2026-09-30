@@ -28,7 +28,7 @@ This package settles on **Robinhood Chain** via `Veya.sol` (testnet chain id `46
 - Chain tests covering faucet URL + pin exports.
 
 ### Changed
-- Package identity / publish name aligned to **`@veyanet/sdk@1.2.2`** (tree had drifted to stale `@veya/sdk` / `1.0.0`; `SDK_NAME` / `SDK_VERSION` / `SDK_SURFACE` match npm).
+- Package identity / publish name aligned to **`@veyanet/sdk@1.2.2`** (tree had drifted to stale `@veyanet/sdk` / `1.0.0`; `SDK_NAME` / `SDK_VERSION` / `SDK_SURFACE` match npm).
 - `EvmAnchor.send` takes a lazy tx factory so balance is checked **before** the wallet prompt; zero-balance wallets never open a doomed signature flow.
 - `fromAnchorRevert` normalizes insufficient-funds / intrinsic-gas failures onto `UNFUNDED_PAYER` + `NO_TESTNET_TOKENS` (same sentence as MCP).
 - Public exports re-export faucet URL, `isUnfundedPayerError`, and `NO_TESTNET_TOKENS` from the package root.

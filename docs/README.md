@@ -6,7 +6,7 @@
   **Bounded autonomous systems on Robinhood Chain: post-quantum identity, sealed execution, and Veya.sol settlement.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../README.md)
-  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.0.0-cb3837?style=flat-edge)](../package.json)
+  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.4-cb3837?style=flat-edge)](../package.json)
   [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green?style=flat-edge)](../package.json)
   [![ethers](https://img.shields.io/badge/ethers-v6-3c3c3d?style=flat-edge)](../package.json)
   [![Testnet](https://img.shields.io/badge/Robinhood%20Chain-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
@@ -221,7 +221,7 @@ flowchart LR
 ```
 
 ├── src/
-│   ├── abi/              # Inlined Veya.sol ABI + bytecode (no @veya/program dep)
+│   ├── abi/              # Inlined Veya.sol ABI + bytecode (no @veyanet/program dep)
 │   ├── chain.ts          # ROBINHOOD_TESTNET constants, explorer helpers
 │   ├── config.ts         # VeyaClientConfig, resolveConfig
 │   ├── index.ts          # Public barrel
@@ -394,7 +394,7 @@ Solidity custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, …)
 
 ### Versioning
 
-Package version is **1.0.0** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
+Package version is **1.2.4** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
 
 ### Environment variables
 
@@ -546,7 +546,7 @@ Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` me
 
 <div align="center">
 
-**@veyanet/sdk documentation v1.0.0**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
+**@veyanet/sdk documentation v1.2.4**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
 
 [Deployment](./DEPLOYMENT.md) • [Types](./api/types-reference.md) • [Veya.sol](./programs/veya-contract.md) • [Operator surface](./CLI.md)
 

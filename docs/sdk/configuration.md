@@ -2,7 +2,7 @@
 
 **Configure `@veyanet/sdk` for post-quantum agent settlement on Robinhood Chain without a hosted API server.**
 
-The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol` address, validator fleet URLs, and sealed-node endpoints. All configuration resolves through `resolveConfig()` with environment-variable fallbacks. Settlement is EVM: native units are wei, function names are camelCase, and the ABI is inlined in `src/abi` so the package does not depend on `@veya/program`.
+The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol` address, validator fleet URLs, and sealed-node endpoints. All configuration resolves through `resolveConfig()` with environment-variable fallbacks. Settlement is EVM: native units are wei, function names are camelCase, and the ABI is inlined in `src/abi` so the package does not depend on `@veyanet/program`.
 
 **Related:** [evm-anchoring.md](./evm-anchoring.md) • [decentralized-compute.md](./decentralized-compute.md) • [sealed-execution.md](./sealed-execution.md) • [pq-crypto.md](./pq-crypto.md)
 
@@ -54,7 +54,7 @@ The following assumptions are baked into defaults and should be treated as invar
 - `Veya.sol` is a protocol contract that stores environment, agent, and commitment state. It is not an ERC-20.
 - Spending caps are denominated in wei (18 decimals for native ETH on Robinhood Chain).
 - Contract function names in `INSTRUCTION_NAMES` are camelCase (`registerEnvironment`, not `register_environment`).
-- The ABI lives in `src/abi` and is imported as JSON. There is no `@veya/program` dependency.
+- The ABI lives in `src/abi` and is imported as JSON. There is no `@veyanet/program` dependency.
 
 If any of those assumptions is violated at runtime, writes must fail closed. The `EvmAnchor.ensureRobinhoodChain()` gate exists specifically so a mis-pointed RPC cannot silently land transactions on another EVM.
 
@@ -593,7 +593,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veyanet/sdk` version `1.0.0` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
+`@veyanet/sdk` version `1.2.4` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case leftovers from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 

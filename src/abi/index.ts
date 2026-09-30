@@ -2,7 +2,7 @@
  * Veya.sol ABI as compiled for Robinhood Chain.
  *
  * Inlined here so @veyanet/sdk does not depend on the Anchor monorepo's
- * @veya/program package. Keep this file in lockstep with
+ * @veyanet/program package. Keep this file in lockstep with
  * Vendored ABI for Veya.sol (Robinhood Chain). Keep `Veya.json` in lockstep with the
  * deployed contract; this package does not import Solidity from another repo folder.
  */

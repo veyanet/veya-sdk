@@ -17,7 +17,7 @@ import {
 const client = new VeyaClient();
 const cfg = client.config;
 
-console.log("=== @veya/sdk doctor ===");
+console.log("=== @veyanet/sdk doctor ===");
 console.log(JSON.stringify(describeConfig(cfg), null, 2));
 
 const ping = await pingRpc(cfg.rpcUrl);
