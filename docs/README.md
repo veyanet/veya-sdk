@@ -6,7 +6,7 @@
   **Bounded autonomous systems on Robinhood Chain: post-quantum identity, sealed execution, and Veya.sol settlement.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../README.md)
-  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.4-cb3837?style=flat-edge)](../package.json)
+  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.4-cb3837?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green?style=flat-edge)](../package.json)
   [![ethers](https://img.shields.io/badge/ethers-v6-3c3c3d?style=flat-edge)](../package.json)
   [![Testnet](https://img.shields.io/badge/Robinhood%20Chain-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
