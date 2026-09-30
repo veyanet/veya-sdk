@@ -7,7 +7,7 @@
 
   [![Robinhood Testnet](https://img.shields.io/badge/Testnet-Chain%20ID%2046630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84)
   [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
-  [![@veyanet/sdk](https://img.shields.io/badge/%40veya%2Fsdk-1.2.4-green?style=flat-edge)](../README.md)
+  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.4-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
 
   **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
