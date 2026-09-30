@@ -8,6 +8,16 @@ This package settles on **Robinhood Chain** via `Veya.sol` (testnet chain id `46
 
 ---
 
+## [1.2.4] — 2026-09-30
+
+### Added
+- `proveInput`: text or canonical JSON becomes a BLAKE3 digest. A `0x` transaction hash is read from the live receipt. Success is a parsed `Veya.sol` log plus the explorer link. A hash with no VEYA log is a refusal.
+- Anchor writes one `storeCommitment` of that digest only when a funded payer key and an existing environment id are both present, then reads that transaction back. Without anchor, the result is the digest and `anchored` is false. Anchor without a payer key is a refusal. Neither of those sends a transaction.
+- `examples/prove.ts` prints that proof JSON and exits non-zero on a refusal.
+- The field list and a real run are in [docs/sdk/proof.md](./docs/sdk/proof.md).
+
+---
+
 ## [1.2.2] — 2026-09-20
 
 ### Added

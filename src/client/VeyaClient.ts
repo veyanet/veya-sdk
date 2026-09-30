@@ -6,6 +6,7 @@ import * as pq from "../pq/index.js";
 import { protectedExec } from "../sealed/protectedExec.js";
 import { requireVerifiedSeal } from "../sealed/types.js";
 import { parseProofFromTransaction } from "./receipts.js";
+import { proveInput as runProveInput, type ProveOptions, type ProveSource, type ProofResult } from "../proof.js";
 import { EvmAnchor } from "./evm.js";
 import {
   createReadContract,
@@ -136,6 +137,11 @@ export class VeyaClient {
    * Parse Veya.sol logs from a receipt and eth_call commitments(digest)
    * for each CommitmentStored event. No payer key.
    */
+  /** Text, JSON, or a transaction hash. Anchor writes only when a payer is configured. */
+  async proveInput(source: ProveSource, options?: ProveOptions): Promise<ProofResult> {
+    return runProveInput(this, source, options);
+  }
+
   async verifyCommitmentOnChain(txHash: string) {
     return verifyCommitmentReceipt(
       this.config.rpcUrl,

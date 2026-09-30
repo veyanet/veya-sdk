@@ -423,6 +423,7 @@ This package is a TypeScript SDK, not a Rust CLI. Operators drive it from Node:
 | Entry | Purpose |
 |-------|---------|
 | `examples/quickstart.ts` | Local BLAKE3 hash; prints default testnet targets |
+| `examples/prove.ts` | Text, JSON, or a receipt hash in; one proof JSON out. See [sdk/proof.md](./sdk/proof.md) |
 | `scripts/doctor.ts` | Checks RPC, chain id, contract address, env completeness |
 | `scripts/live-rpc.ts` | Live `eth_chainId` / `eth_getCode` / optional read of `environments` |
 | `npm test` | Vitest: PQ round-trip, chain constants, camelCase ABI names |

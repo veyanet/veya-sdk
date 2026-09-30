@@ -32,6 +32,7 @@ By integrating `@veya/sdk` into your agentic runtime, you enable the following c
 *   **Decentralized 2-of-3 Consensus**: Orchestrate tasks across independent, cryptographically attested validator nodes to verify execution outputs before committing state transitions.
 *   **Sealed Execution (AES-256-GCM)**: Execute confidential tasks within a software sealed-node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
 *   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), and tool permissions to the protocol contract via `EvmAnchor`.
+*   **One proof entry**: `proveInput` takes text, canonical JSON, or a receipt hash. A receipt with a `Veya.sol` log returns the explorer link. A hash with no VEYA log is a refusal. Without anchor, the result is the digest and `anchored` is false, and no transaction is sent. Anchor writes one `storeCommitment` only when a funded payer key and an existing environment id are both present, then reads that transaction back. Anchor without a payer key is a refusal and sends nothing. See [docs/sdk/proof.md](./docs/sdk/proof.md).
 
 ---
 
