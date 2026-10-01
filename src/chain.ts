@@ -27,13 +27,72 @@ export const ROBINHOOD_TESTNET = {
 
 export const ROBINHOOD_TESTNET_FAUCET_URL = ROBINHOOD_TESTNET.faucetUrl;
 
-export type RobinhoodNetwork = typeof ROBINHOOD_TESTNET;
+/** Robinhood Chain mainnet. Veya.sol deployed 2026-10-05. */
+export const ROBINHOOD_MAINNET_CHAIN_ID = 4663;
+
+export const ROBINHOOD_MAINNET = {
+  chainId: ROBINHOOD_MAINNET_CHAIN_ID,
+  chainIdHex: "0x1237",
+  name: "Robinhood Chain",
+  rpcUrl: "https://rpc.mainnet.chain.robinhood.com",
+  explorerUrl: "https://robinhoodchain.blockscout.com",
+  nativeCurrency: {
+    name: "ETH",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  /** Deploy tx 0x20207430b768f2215e68a0f37739070599362047493acf1b90a2eba2b7653559 */
+  contractAddress: "0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674",
+} as const;
+
+/** 0.01 ETH. Projected fee above this, at the gas ceiling, sends nothing. */
+export const MAINNET_MAX_FEE_WEI = 10n ** 16n;
+export const MAINNET_GAS_CEILING = 300_000;
+
+export type VeyaNetworkName = "testnet" | "mainnet";
+
+export type RobinhoodNetwork = typeof ROBINHOOD_TESTNET | typeof ROBINHOOD_MAINNET;
+
+/**
+ * Explicit "mainnet" or "testnet" wins. Otherwise ROBINHOOD_NETWORK=testnet
+ * selects the previous testnet profile. Unset, and any other value, is mainnet.
+ */
+export function resolveNetworkName(explicit?: string | null): VeyaNetworkName {
+  const raw = (explicit ?? "").trim().toLowerCase();
+  if (raw === "mainnet" || raw === "testnet") return raw;
+  const env = (process.env.ROBINHOOD_NETWORK ?? "").trim().toLowerCase();
+  return env === "testnet" ? "testnet" : "mainnet";
+}
+
+export function isRobinhoodMainnet(chainId: number | bigint): boolean {
+  return BigInt(chainId) === BigInt(ROBINHOOD_MAINNET_CHAIN_ID);
+}
+
+/** Refuse a mainnet write whose gas price would push the ceiling past 0.01 ETH. */
+export function assertMainnetFee(gasPriceWei: bigint): void {
+  if (gasPriceWei < 0n) {
+    throw new VeyaSdkError("FEE_CAP", "Mainnet gas price must be non-negative. Nothing was sent.");
+  }
+  const projected = gasPriceWei * BigInt(MAINNET_GAS_CEILING);
+  if (projected > MAINNET_MAX_FEE_WEI) {
+    throw new VeyaSdkError("FEE_CAP", "Mainnet fee would exceed 0.01 ETH. Nothing was sent.", {
+      projectedWei: projected.toString(),
+      maxFeeWei: MAINNET_MAX_FEE_WEI.toString(),
+      gasCeiling: MAINNET_GAS_CEILING,
+    });
+  }
+}
 
 /**
  * wallet_addEthereumChain payload for MetaMask / injected wallets.
  * The dashboard uses the same numbers; keep this the single source.
  */
-export function walletAddChainParams(network: RobinhoodNetwork = ROBINHOOD_TESTNET) {
+/** Profile picked by `resolveNetworkName()`: Mainnet unless `ROBINHOOD_NETWORK=testnet`. */
+export function defaultRobinhoodProfile(): RobinhoodNetwork {
+  return resolveNetworkName() === "testnet" ? ROBINHOOD_TESTNET : ROBINHOOD_MAINNET;
+}
+
+export function walletAddChainParams(network: RobinhoodNetwork = defaultRobinhoodProfile()) {
   return {
     chainId: network.chainIdHex,
     chainName: network.name,
@@ -45,7 +104,7 @@ export function walletAddChainParams(network: RobinhoodNetwork = ROBINHOOD_TESTN
 
 export function explorerTxUrl(
   txHash: string,
-  explorerBase: string = ROBINHOOD_TESTNET.explorerUrl,
+  explorerBase: string = defaultRobinhoodProfile().explorerUrl,
 ): string {
   const hash = txHash.startsWith("0x") ? txHash : `0x${txHash}`;
   if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) {
@@ -56,15 +115,15 @@ export function explorerTxUrl(
 
 export function explorerAddressUrl(
   address: string,
-  explorerBase: string = ROBINHOOD_TESTNET.explorerUrl,
+  explorerBase: string = defaultRobinhoodProfile().explorerUrl,
 ): string {
   const addr = assertHexAddress(address, "explorer address");
   return `${explorerBase.replace(/\/$/, "")}/address/${addr}`;
 }
 
 export function explorerContractUrl(
-  address: string = ROBINHOOD_TESTNET.contractAddress,
-  explorerBase: string = ROBINHOOD_TESTNET.explorerUrl,
+  address: string = defaultRobinhoodProfile().contractAddress,
+  explorerBase: string = defaultRobinhoodProfile().explorerUrl,
 ): string {
   return explorerAddressUrl(address, explorerBase);
 }
