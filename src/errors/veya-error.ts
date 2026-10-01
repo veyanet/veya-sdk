@@ -9,6 +9,10 @@
 
 export const VEYA_ERROR_CODES = [
   "CHAIN_MISMATCH",
+  "MAINNET_UNPUBLISHED",
+  "FEE_CAP",
+  "GUEST_TESTNET_ONLY",
+  "RECEIPT_CHAIN",
   "RPC_UNREACHABLE",
   "MISSING_PAYER",
   "INVALID_HEX",
@@ -33,9 +37,16 @@ export const VEYA_ERROR_CODES = [
   "UNFUNDED_PAYER",
 ] as const;
 
-/** User-paid writes (SDK / MCP / WalletConnect). Exact sentence — do not paraphrase. */
+/** User-paid writes (SDK / MCP / WalletConnect)*/
 export const NO_TESTNET_TOKENS =
   "You don't have testnet tokens. Please get them for the transaction.";
+
+export const NO_MAINNET_FUNDS =
+  "Your wallet has no ETH on Robinhood Chain. Add funds and try again.";
+
+export function noFundsMessage(network: "testnet" | "mainnet" = "testnet"): string {
+  return network === "mainnet" ? NO_MAINNET_FUNDS : NO_TESTNET_TOKENS;
+}
 
 const UNFUNDED_PAYER_RE =
   /insufficient funds|insufficient balance|INSUFFICIENT_FUNDS|exceeds the balance|intrinsic gas too low|don't have testnet tokens/i;
@@ -94,34 +105,55 @@ export function isVeyaSdkError(err: unknown): err is VeyaSdkError {
   return err instanceof VeyaSdkError;
 }
 
+function pickRevertHex(value: unknown): string | undefined {
+  if (typeof value === "string" && value.startsWith("0x") && value.length >= 10) return value;
+  return undefined;
+}
+
 function extractRevertData(err: unknown): string | undefined {
   if (!err || typeof err !== "object") return undefined;
   const anyErr = err as {
-    data?: string;
-    info?: { error?: { data?: string } };
-    error?: { data?: string };
-    shortMessage?: string;
+    data?: unknown;
+    info?: { error?: { data?: unknown } };
+    error?: { data?: unknown };
   };
-  const candidates = [anyErr.data, anyErr.info?.error?.data, anyErr.error?.data];
+  const nested =
+    anyErr.data && typeof anyErr.data === "object"
+      ? (anyErr.data as { data?: unknown }).data
+      : undefined;
+  const candidates = [anyErr.data, nested, anyErr.info?.error?.data, anyErr.error?.data];
   for (const c of candidates) {
-    if (typeof c === "string" && c.startsWith("0x") && c.length >= 10) return c;
+    const hex = pickRevertHex(c);
+    if (hex) return hex;
+  }
+  const fromText = flattenErrorText(err).match(/0x[0-9a-fA-F]{8}\b/g) ?? [];
+  for (const item of fromText) {
+    if (VEYA_REVERT_SELECTORS[item.toLowerCase()]) return item;
   }
   return undefined;
 }
+
+const READABLE_REVERT: Partial<Record<VeyaErrorCode, string>> = {
+  ENVIRONMENT_MISSING: "This environment is not registered on the selected network. Nothing was sent.",
+  ENVIRONMENT_EXISTS: "This environment is already registered on the selected network. Nothing was sent.",
+  ATTESTATION_EXISTS: "This execution is already attested. Nothing was sent.",
+  PQ_ATTESTATION_EXISTS: "This post-quantum attestation is already stored. Nothing was sent.",
+  SPENDING_EXCEEDED: "This spend is above the on-chain cap. Nothing was sent.",
+};
 
 /**
  * Map an ethers write failure onto a VeyaSdkError.
  * Pass-through if the value is already a VeyaSdkError.
  */
-export function fromAnchorRevert(err: unknown): VeyaSdkError {
+export function fromAnchorRevert(err: unknown, network: "testnet" | "mainnet" = "testnet"): VeyaSdkError {
   if (isVeyaSdkError(err)) {
     if (err.code === "UNFUNDED_PAYER" || isUnfundedPayerError(err)) {
-      return new VeyaSdkError("UNFUNDED_PAYER", NO_TESTNET_TOKENS, err.details);
+      return new VeyaSdkError("UNFUNDED_PAYER", noFundsMessage(network), err.details);
     }
     return err;
   }
   if (isUnfundedPayerError(err)) {
-    return new VeyaSdkError("UNFUNDED_PAYER", NO_TESTNET_TOKENS);
+    return new VeyaSdkError("UNFUNDED_PAYER", noFundsMessage(network));
   }
   const data = extractRevertData(err);
   const selector = data ? data.slice(0, 10).toLowerCase() : undefined;
@@ -136,7 +168,7 @@ export function fromAnchorRevert(err: unknown): VeyaSdkError {
     );
   }
   if (mapped) {
-    return new VeyaSdkError(mapped, rawMessage, { selector, data });
+    return new VeyaSdkError(mapped, READABLE_REVERT[mapped] ?? rawMessage, { selector, data });
   }
   return new VeyaSdkError("ANCHOR_REVERT", rawMessage, { selector, data });
 }
