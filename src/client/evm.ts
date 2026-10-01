@@ -1,8 +1,8 @@
 import { ethers } from "ethers";
 import { VEYA_ABI } from "../abi/index.js";
-import { explorerTxUrl } from "../chain.js";
+import { assertMainnetFee, explorerTxUrl, type VeyaNetworkName } from "../chain.js";
 import { resolveConfig, type VeyaClientConfig } from "../config.js";
-import { VeyaSdkError, fromAnchorRevert, NO_TESTNET_TOKENS } from "../errors/veya-error.js";
+import { VeyaSdkError, fromAnchorRevert, noFundsMessage } from "../errors/veya-error.js";
 import * as pq from "../pq/index.js";
 
 /**
@@ -17,6 +17,7 @@ export class EvmAnchor {
   readonly provider: ethers.JsonRpcProvider;
   readonly contract: ethers.Contract;
   readonly wallet: ethers.Wallet;
+  readonly network: VeyaNetworkName;
   readonly chainId: number;
   readonly explorerUrl: string;
   readonly contractAddress: string;
@@ -25,6 +26,14 @@ export class EvmAnchor {
 
   constructor(config: VeyaClientConfig & { payerPrivateKey: string }) {
     const resolved = resolveConfig(config);
+    if (resolved.network === "mainnet" && !resolved.contractAddress) {
+      throw new VeyaSdkError(
+        "MAINNET_UNPUBLISHED",
+        "Veya.sol is not published on Robinhood Chain mainnet. Nothing was sent.",
+        { chainId: resolved.chainId },
+      );
+    }
+    this.network = resolved.network;
     this.chainId = resolved.chainId;
     this.explorerUrl = resolved.explorerUrl;
     this.contractAddress = resolved.contractAddress;
@@ -58,9 +67,14 @@ export class EvmAnchor {
 
   private async send(sendTx: () => Promise<ethers.ContractTransactionResponse>): Promise<string> {
     await this.ensureRobinhoodChain();
+    if (this.network === "mainnet") {
+      const fee = await this.provider.getFeeData();
+      const price = fee.maxFeePerGas ?? fee.gasPrice ?? 0n;
+      assertMainnetFee(price);
+    }
     const balance = await this.provider.getBalance(this.wallet.address);
     if (balance === 0n) {
-      throw new VeyaSdkError("UNFUNDED_PAYER", NO_TESTNET_TOKENS);
+      throw new VeyaSdkError("UNFUNDED_PAYER", noFundsMessage(this.network));
     }
     try {
       const tx = await sendTx();
@@ -70,7 +84,7 @@ export class EvmAnchor {
       }
       return receipt.hash;
     } catch (err) {
-      throw fromAnchorRevert(err);
+      throw fromAnchorRevert(err, this.network);
     }
   }
 
