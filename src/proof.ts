@@ -5,6 +5,7 @@
  */
 
 import { VeyaSdkError } from "./errors/veya-error.js";
+import { assertReceiptChain, receiptNetwork, type ReceiptNetwork } from "./settlement.js";
 import { hashBlake3 } from "./pq/blake3.js";
 import { uuidStringToBytes } from "./encoding/uuid.js";
 import type { VeyaClient } from "./client/VeyaClient.js";
@@ -28,6 +29,8 @@ export type ProofResult = {
   digestHex: string | null;
   anchored: boolean;
   chainId: number;
+  /** Chain that produced this result. A testnet hash is never labeled mainnet. */
+  network: ReceiptNetwork;
   contractAddress: string;
   txHash: string | null;
   explorerUrl: string | null;
@@ -69,6 +72,7 @@ function base(client: VeyaClient, inputKind: ProofResult["inputKind"]): ProofRes
     digestHex: null,
     anchored: false,
     chainId: client.config.chainId,
+    network: receiptNetwork(client.config.chainId),
     contractAddress: client.config.contractAddress,
     txHash: null,
     explorerUrl: null,
@@ -99,13 +103,35 @@ export async function proveInput(
   const ping = await client.pingChain();
   const result = base(client, source.kind);
   result.chainId = Number(ping.chainId);
+  result.network = receiptNetwork(result.chainId);
 
   if (source.kind === "tx") {
+    try {
+      assertReceiptChain(result.chainId, client.config.chainId);
+    } catch (err) {
+      if (err instanceof VeyaSdkError && err.code === "RECEIPT_CHAIN") {
+        result.refusal = err.message;
+        result.txHash = source.txHash;
+        return result;
+      }
+      throw err;
+    }
     if (!TX_HASH_RE.test(source.txHash)) {
       result.refusal = "A receipt hash is 0x followed by 64 hex characters.";
       return result;
     }
-    const proof = await client.verifyTransaction(source.txHash);
+    let proof;
+    try {
+      proof = await client.verifyTransaction(source.txHash);
+    } catch (err) {
+      if (err instanceof VeyaSdkError && err.code === "CHAIN_MISMATCH") {
+        result.refusal = err.message;
+        result.txHash = source.txHash;
+        result.explorerUrl = client.explorerFor(source.txHash);
+        return result;
+      }
+      throw err;
+    }
     if (!proof) {
       result.refusal = "No VEYA log was found on that transaction.";
       result.txHash = source.txHash;
