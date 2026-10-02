@@ -1,6 +1,6 @@
 /**
  * Read-only Veya.sol calls. No payer key and no transaction.
- * MCP chain tools use these so a stranger can check a commitment,
+ * MCP chain tools use these so a public user can check a commitment,
  * an environment, or an agent without opening a wallet.
  */
 
