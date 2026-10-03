@@ -1,3 +1,4 @@
+import { VeyaSdkError } from "../errors/veya-error.js";
 import { signPQ, verifyPQ } from "../pq/mldsa.js";
 import { establishKyberSession } from "./sessions.js";
 
@@ -14,15 +15,24 @@ export type McpMessage = {
 
 const policies = new Map<string, Set<string>>();
 
-export function setToolPolicy(agentId: string, tool: string, allowed: boolean) {
-  if (!policies.has(agentId)) policies.set(agentId, new Set());
-  const set = policies.get(agentId)!;
+function policyKey(ownerScope: string, agentId: string): string {
+  const scope = ownerScope?.trim() ?? "";
+  if (!scope) {
+    throw new VeyaSdkError("INVALID_CONFIG", "owner scope is required");
+  }
+  return `${scope}\0${agentId}`;
+}
+
+export function setToolPolicy(agentId: string, tool: string, allowed: boolean, ownerScope: string) {
+  const key = policyKey(ownerScope, agentId);
+  if (!policies.has(key)) policies.set(key, new Set());
+  const set = policies.get(key)!;
   if (allowed) set.add(tool);
   else set.delete(tool);
 }
 
-export function routeMessage(msg: Omit<McpMessage, "policyStatus">): McpMessage {
-  const allowed = policies.get(msg.fromAgent)?.has(msg.tool) ?? false;
+export function routeMessage(msg: Omit<McpMessage, "policyStatus">, ownerScope: string): McpMessage {
+  const allowed = policies.get(policyKey(ownerScope, msg.fromAgent))?.has(msg.tool) ?? false;
   return { ...msg, policyStatus: allowed ? "allowed" : "denied" };
 }
 
@@ -35,8 +45,9 @@ export type SecureRouteOptions = {
 export async function routeSecureMessage(
   msg: Omit<McpMessage, "policyStatus" | "kyberSessionId" | "mlDsaSig">,
   identity: SecureRouteOptions,
+  ownerScope: string,
 ): Promise<McpMessage> {
-  const routed = routeMessage(msg);
+  const routed = routeMessage(msg, ownerScope);
   if (routed.policyStatus === "denied") return routed;
 
   const session = await establishKyberSession(msg.fromAgent, msg.toAgent);
@@ -65,20 +76,20 @@ export async function verifySecureMessage(
   return verifyPQ(sig, bytes, senderPublicKey);
 }
 
-export function listToolPolicy(agentId: string): string[] {
-  return [...(policies.get(agentId) ?? [])].sort();
+export function listToolPolicy(agentId: string, ownerScope: string): string[] {
+  return [...(policies.get(policyKey(ownerScope, agentId)) ?? [])].sort();
 }
 
 export function clearToolPolicies(): void {
   policies.clear();
 }
 
-export function isToolAllowed(agentId: string, tool: string): boolean {
-  return policies.get(agentId)?.has(tool) ?? false;
+export function isToolAllowed(agentId: string, tool: string, ownerScope: string): boolean {
+  return policies.get(policyKey(ownerScope, agentId))?.has(tool) ?? false;
 }
 
-export function requireAllowedTool(agentId: string, tool: string): void {
-  if (!isToolAllowed(agentId, tool)) {
+export function requireAllowedTool(agentId: string, tool: string, ownerScope: string): void {
+  if (!isToolAllowed(agentId, tool, ownerScope)) {
     throw new Error(`tool ${tool} is not in policy for agent ${agentId}`);
   }
 }
