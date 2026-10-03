@@ -9,7 +9,7 @@
 
 import { hashBlake3 } from "../pq/blake3.js";
 import { VeyaSdkError } from "../errors/veya-error.js";
-import { entryKey, loadStore, saveStore } from "./store.js";
+import { entryKey, loadStore, requireOwnerScope, saveStore } from "./store.js";
 
 export type MemoryEntry = {
   id: string;
@@ -24,11 +24,13 @@ export async function storeMemory(
   environmentId: string,
   agentId: string,
   data: string,
+  ownerScope: string,
 ): Promise<MemoryEntry> {
+  const scope = requireOwnerScope(ownerScope);
   if (!data) {
     throw new VeyaSdkError("INVALID_CONFIG", "memory data must be a non-empty string");
   }
-  const store = loadStore();
+  const store = loadStore(scope);
   const id = crypto.randomUUID();
   const entry: MemoryEntry = {
     id,
@@ -39,12 +41,12 @@ export async function storeMemory(
     nullified: false,
   };
   store.entries[entryKey(environmentId, id)] = entry;
-  saveStore(store);
+  saveStore(store, scope);
   return entry;
 }
 
-export async function readMemory(environmentId: string, id: string): Promise<MemoryEntry> {
-  const store = loadStore();
+export async function readMemory(environmentId: string, id: string, ownerScope: string): Promise<MemoryEntry> {
+  const store = loadStore(ownerScope);
   const entry = store.entries[entryKey(environmentId, id)];
   if (!entry) throw new VeyaSdkError("MEMORY_MISSING", "memory not found", { environmentId, id });
   if (entry.nullified) {
@@ -62,29 +64,30 @@ export async function readMemory(environmentId: string, id: string): Promise<Mem
   return entry;
 }
 
-export function invalidateMemory(environmentId: string, id: string): void {
-  const store = loadStore();
+export function invalidateMemory(environmentId: string, id: string, ownerScope: string): void {
+  const scope = requireOwnerScope(ownerScope);
+  const store = loadStore(scope);
   const entry = store.entries[entryKey(environmentId, id)];
   if (!entry) throw new VeyaSdkError("MEMORY_MISSING", "memory not found", { environmentId, id });
   entry.nullified = true;
-  saveStore(store);
+  saveStore(store, scope);
 }
 
-export function listMemory(environmentId: string): MemoryEntry[] {
-  const store = loadStore();
+export function listMemory(environmentId: string, ownerScope: string): MemoryEntry[] {
+  const store = loadStore(ownerScope);
   return Object.values(store.entries).filter((e) => e.environmentId === environmentId);
 }
 
-export function listActiveMemory(environmentId: string): MemoryEntry[] {
-  return listMemory(environmentId).filter((e) => !e.nullified);
+export function listActiveMemory(environmentId: string, ownerScope: string): MemoryEntry[] {
+  return listMemory(environmentId, ownerScope).filter((e) => !e.nullified);
 }
 
-export async function getMemoryHash(environmentId: string, id: string): Promise<string> {
-  const entry = await readMemory(environmentId, id);
+export async function getMemoryHash(environmentId: string, id: string, ownerScope: string): Promise<string> {
+  const entry = await readMemory(environmentId, id, ownerScope);
   return entry.blake3ContentHash;
 }
 
-export function memoryExists(environmentId: string, id: string): boolean {
-  const store = loadStore();
+export function memoryExists(environmentId: string, id: string, ownerScope: string): boolean {
+  const store = loadStore(ownerScope);
   return Boolean(store.entries[entryKey(environmentId, id)]);
 }
