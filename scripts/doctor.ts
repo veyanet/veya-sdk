@@ -8,7 +8,6 @@
  */
 
 import {
-  ROBINHOOD_TESTNET,
   VeyaClient,
   describeConfig,
   pingRpc,
@@ -23,10 +22,11 @@ console.log(JSON.stringify(describeConfig(cfg), null, 2));
 const ping = await pingRpc(cfg.rpcUrl);
 const chainOk = ping.chainId === BigInt(cfg.chainId);
 console.log("rpc", {
+  network: cfg.network,
   chainId: ping.chainId.toString(),
   blockNumber: ping.blockNumber,
   matchesConfig: chainOk,
-  expected: ROBINHOOD_TESTNET.chainId,
+  expected: cfg.chainId,
 });
 
 const { ethers } = await import("ethers");
