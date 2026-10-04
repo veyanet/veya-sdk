@@ -8,26 +8,48 @@
  */
 
 export const SDK_NAME = "@veyanet/sdk";
-export const SDK_VERSION = "1.2.4";
+export const SDK_VERSION = "1.2.8";
 
 /** What this package is, in one object operators can log from doctor scripts. */
 export const SDK_SURFACE = {
   name: SDK_NAME,
   version: SDK_VERSION,
   chain: "Robinhood Chain",
-  chainId: 46630,
+  chainId: 4663,
   contract: "Veya.sol",
   identity: "ML-DSA-44",
   kem: "Kyber-768",
   commitment: "BLAKE3-256",
   sealed: "AES-256-GCM",
-  notFhe: true,
-  notMainnet: true,
+  settlement: "mainnet",
 } as const;
 
 export { VeyaClient } from "./client/VeyaClient.js";
 export { proveInput, canonicalJson, TX_HASH_RE } from "./proof.js";
+export {
+  SETTLEMENT,
+  PHASE3_DECISION,
+  MAINNET_DEPLOY_CONFIRM,
+  receiptNetwork,
+  receiptExplorer,
+  assertReceiptChain,
+  mainnetDeployAllowed,
+  mainnetDeployPlan,
+  mainnetFundingStatus,
+  guestUseOnMainnetAllowed,
+  assertRealEthSpend,
+  mainnetIncident,
+} from "./settlement.js";
+export type { ReceiptNetwork, MainnetIncident } from "./settlement.js";
 export type { ProveSource, ProveOptions, ProofResult } from "./proof.js";
+export { sealDecision, resolveSealPayer, resolveSealDecisionIds, SEAL_DECISION_ENVIRONMENT_ID, SEAL_DECISION_AGENT_ID } from "./sealDecision.js";
+export type {
+  SealDecisionInput,
+  SealDecisionOptions,
+  SealDecisionResult,
+  SealDecisionSuccess,
+  SealDecisionRefusal,
+} from "./sealDecision.js";
 export type { VeyaClientConfig, ResolvedVeyaConfig } from "./config.js";
 export { resolveConfig, describeConfig } from "./config.js";
 
@@ -35,14 +57,22 @@ export {
   ROBINHOOD_TESTNET,
   ROBINHOOD_TESTNET_CHAIN_ID,
   ROBINHOOD_TESTNET_FAUCET_URL,
+  ROBINHOOD_MAINNET,
+  ROBINHOOD_MAINNET_CHAIN_ID,
+  MAINNET_MAX_FEE_WEI,
+  MAINNET_GAS_CEILING,
   explorerTxUrl,
   explorerAddressUrl,
   explorerContractUrl,
   isRobinhoodTestnet,
+  isRobinhoodMainnet,
+  resolveNetworkName,
+  assertMainnetFee,
   walletAddChainParams,
+  defaultRobinhoodProfile,
   pingRpc,
 } from "./chain.js";
-export type { RobinhoodNetwork } from "./chain.js";
+export type { RobinhoodNetwork, VeyaNetworkName } from "./chain.js";
 
 export { VEYA_ABI, VEYA_BYTECODE, VEYA_PROTOCOL_CONTRACT_ADDRESS, VEYA_CONTRACT_ADDRESS, abiFunctionNames, abiEventNames, abiErrorNames } from "./abi/index.js";
 
@@ -64,6 +94,8 @@ export {
   fromAnchorRevert,
   isUnfundedPayerError,
   NO_TESTNET_TOKENS,
+  NO_MAINNET_FUNDS,
+  noFundsMessage,
   VEYA_ERROR_CODES,
   VEYA_REVERT_SELECTORS,
 } from "./errors/veya-error.js";
