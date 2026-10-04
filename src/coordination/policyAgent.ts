@@ -20,6 +20,7 @@ export type PolicyAgentConfig = {
   maxWeiPerAction?: number;
   requireConsensus?: boolean;
   veyaToolsOnly?: boolean;
+  ownerScope?: string;
 };
 
 export class PolicyAgent {
@@ -30,7 +31,11 @@ export class PolicyAgent {
       return { allowed: false, reason: "only veya_* tools are permitted in this environment" };
     }
 
-    const routed = routeMessage(msg);
+    if (!this.config.ownerScope?.trim()) {
+      return { allowed: false, reason: "owner scope required" };
+    }
+
+    const routed = routeMessage(msg, this.config.ownerScope);
     if (routed.policyStatus === "denied") {
       return { allowed: false, reason: "tool not in agent policy", routed };
     }
