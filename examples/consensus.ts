@@ -28,6 +28,7 @@ try {
     })),
   });
 } catch (err) {
-  console.error("consensus did not complete:", err instanceof Error ? err.message : err);
+  const message = err instanceof Error ? err.message : String(err);
+  console.log(JSON.stringify({ ok: false, failClosed: true, reason: message }, null, 2));
   process.exitCode = 1;
 }
