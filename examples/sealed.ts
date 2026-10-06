@@ -24,6 +24,7 @@ try {
     signatureBytes: result.mldsa_signature.length / 2,
   });
 } catch (err) {
-  console.error("sealed-node did not run:", err instanceof Error ? err.message : err);
+  const message = err instanceof Error ? err.message : String(err);
+  console.log(JSON.stringify({ ok: false, failClosed: true, sent: false, reason: message }, null, 2));
   process.exitCode = 1;
 }
