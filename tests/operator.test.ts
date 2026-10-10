@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { VeyaClient } from "../src/client/VeyaClient.js";
 import { setSpendingLimit, recordSpend, remainingSpend } from "../src/spending/limits.js";
 import { setToolPolicy, routeMessage, isVeyaToolName } from "../src/coordination/router.js";
+import { storeMemory } from "../src/memory/nullifier.js";
+import { MEMORY_FILE } from "../src/memory/store.js";
 import { VeyaSdkError } from "../src/errors/veya-error.js";
+import fs from "node:fs";
 import { uuidStringToBytes, uuidBytesToString } from "../src/encoding/uuid.js";
 
 describe("operator surfaces", () => {
@@ -28,7 +31,8 @@ describe("operator surfaces", () => {
   });
 
   it("denies tools not in policy", () => {
-    setToolPolicy("agent-a", "veya_hash_blake3", true);
+    const scope = "operator-test-scope";
+    setToolPolicy("agent-a", "veya_hash_blake3", true, scope);
     expect(isVeyaToolName("veya_hash_blake3")).toBe(true);
     const denied = routeMessage({
       id: "1",
@@ -36,7 +40,15 @@ describe("operator surfaces", () => {
       toAgent: "agent-b",
       tool: "transfer",
       payload: {},
-    });
+    }, scope);
     expect(denied.policyStatus).toBe("denied");
+  });
+
+  it("refuses memory and policy with no owner scope and does not write the shared file", async () => {
+    const before = fs.existsSync(MEMORY_FILE) ? fs.statSync(MEMORY_FILE).mtimeMs : 0;
+    await expect(storeMemory("env", "agent", "note", "")).rejects.toThrow(/owner scope is required/);
+    expect(() => setToolPolicy("agent-a", "veya_hash_blake3", true, "")).toThrow(/owner scope is required/);
+    const after = fs.existsSync(MEMORY_FILE) ? fs.statSync(MEMORY_FILE).mtimeMs : 0;
+    expect(after).toBe(before);
   });
 });
