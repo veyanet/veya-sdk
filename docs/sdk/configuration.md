@@ -2,9 +2,7 @@
 
 **Configure `@veyanet/sdk` for post-quantum agent settlement on Robinhood Chain without a hosted API server.**
 
-The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol` address, validator fleet URLs, and sealed-node endpoints. All configuration resolves through `resolveConfig()` with environment-variable fallbacks. Settlement is EVM: native units are wei, function names are camelCase, and the ABI is inlined in `src/abi` so the package does not depend on `@veyanet/program`.
-
-**Related:** [evm-anchoring.md](./evm-anchoring.md) • [decentralized-compute.md](./decentralized-compute.md) • [sealed-execution.md](./sealed-execution.md) • [pq-crypto.md](./pq-crypto.md)
+The default profile is **Mainnet**, contract `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`. **Testnet** is optional: `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol` address, validator fleet URLs, and sealed-node endpoints. All configuration resolves through `resolveConfig()` with environment-variable fallbacks. Settlement is EVM: native units are wei, function names are camelCase, and the ABI is inlined in `src/abi` so the package does not depend on `@veyanet/program`.
 
 ---
 
@@ -17,7 +15,7 @@ The TypeScript SDK centralizes Robinhood Chain JSON-RPC, the deployed `Veya.sol`
 5. [VeyaClientConfig](#veyaclientconfig)
 6. [ResolvedVeyaConfig](#resolvedveyaconfig)
 7. [resolveConfig](#resolveconfig)
-8. [ROBINHOOD_TESTNET Defaults](#robinhood_testnet-defaults)
+8. [ROBINHOOD_TESTNET profile (optional)](#robinhood_testnet-profile-optional)
 9. [VeyaClient Construction](#veyaclient-construction)
 10. [Environment Variables](#environment-variables)
 11. [Chain Selection](#chain-selection)
@@ -40,7 +38,7 @@ This document describes how `@veyanet/sdk` discovers Robinhood Chain endpoints, 
 
 The configuration surface is intentionally small. Cryptographic modules (`pq`, `memory`, `coordination`) do not require an RPC URL or a private key. Anchoring and on-chain writes require `payerPrivateKey`, `rpcUrl`, `contractAddress`, and `chainId`. Consensus and sealed execution require only HTTP origins for the operator-run node fleet.
 
-Operators who treat this file as a runbook should be able to stand up a client that talks to Robinhood Chain testnet (chain id `46630`), point at `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`, and keep validator and sealed nodes on loopback without mixing units, ABI sources, or chain ids.
+The default profile is **Mainnet**. **Testnet** is `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. Contract addresses are in [NETWORK_PIN.md](../NETWORK_PIN.md). Validator and sealed nodes stay on loopback.
 
 ---
 
@@ -64,10 +62,10 @@ If any of those assumptions is violated at runtime, writes must fail closed. The
 
 | Term | Meaning in this SDK |
 |------|---------------------|
-| Robinhood Chain | EVM network used for VEYA settlement. Testnet chain id is `46630` (`0xb626`). |
+| Robinhood Chain | EVM network used for VEYA settlement. Default profile is Mainnet. Testnet is explicit. |
 | `Veya.sol` | Protocol contract storing environments, agents, attestations, commitments, spending, policy, nullifiers, and sealed chunks. |
 | wei | Native currency subunit. One ETH is `10^18` wei. All on-chain spend amounts use wei. |
-| `resolveConfig` | Pure merge of constructor options, `process.env`, and `ROBINHOOD_TESTNET` defaults. |
+| `resolveConfig` | Pure merge of constructor options, `process.env`, and the Mainnet profile (`ROBINHOOD_MAINNET`). `ROBINHOOD_TESTNET` only when `network: "testnet"`. |
 | `EvmAnchor` | Write client that submits real Robinhood Chain transactions through ethers. |
 | `payerPrivateKey` | Hex secp256k1 key used as `msg.sender` for `Veya.sol` writes. |
 | Validator nodes | HTTP processes that execute payloads and return BLAKE3 + ML-DSA attestations. |
@@ -80,14 +78,14 @@ These terms appear throughout the remaining SDK module docs. When a later docume
 
 ## Configuration Architecture
 
-Configuration flows from explicit constructor options, then environment variables, then hardcoded Robinhood testnet defaults. No remote config service participates.
+Configuration flows from an explicit `network` or constructor field, then `ROBINHOOD_NETWORK`, then the Mainnet profile. `ROBINHOOD_NETWORK=testnet` selects Testnet. No remote config service participates.
 
 ```mermaid
 flowchart LR
     subgraph Sources["Config Sources"]
         Opts["VeyaClientConfig\n(constructor)"]
         Env["process.env\n(ROBINHOOD_RPC_URL, etc.)"]
-        Def["ROBINHOOD_TESTNET\n(chain 46630, Veya.sol)"]
+        Def["ROBINHOOD_MAINNET\n(Robinhood Chain, Veya.sol)"]
     end
 
     subgraph Resolved["Resolved Config"]
@@ -124,11 +122,11 @@ Precedence is left-to-right within each field: constructor wins, then environmen
 
 ```typescript
 export type VeyaClientConfig = {
-  /** EVM JSON-RPC endpoint (Robinhood Chain Testnet by default). */
+  /** EVM JSON-RPC endpoint. Mainnet unless network is testnet. */
   rpcUrl?: string;
   /** Deployed Veya.sol address. */
   contractAddress?: string;
-  /** EVM chain id. Defaults to Robinhood testnet 46630. */
+  /** EVM chain id. Set only when overriding the selected profile. */
   chainId?: number;
   /** Block explorer origin (no trailing slash). */
   explorerUrl?: string;
@@ -191,14 +189,16 @@ export type ResolvedVeyaConfig = {
 import { resolveConfig } from "@veyanet/sdk";
 
 const cfg = resolveConfig({
-  rpcUrl: "https://rpc.testnet.chain.robinhood.com",
-  validatorNodes: ["http://127.0.0.1:7701", "http://127.0.0.1:7702"],
+  validatorNodes: ["<validator-1-url>", "<validator-2-url>"],
 });
 
-console.log(cfg.sealedNodeUrl); // http://127.0.0.1:7800 (default)
-console.log(cfg.chainId);       // 46630
+console.log(cfg.network);       // mainnet
+console.log(cfg.sealedNodeUrl); // <sealed-node-url>
 console.log(cfg.contractAddress);
-// 0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
+// Mainnet protocol contract. The address is in NETWORK_PIN.md.
+
+const testnet = resolveConfig({ network: "testnet" });
+console.log(testnet.network); // testnet
 ```
 
 ### Merge algorithm
@@ -208,39 +208,39 @@ For each field the function evaluates `config.<field> ?? process.env.<VAR> ?? DE
 `validatorNodes` is the only array field. When taken from the environment it is split on commas:
 
 ```
-VEYA_VALIDATOR_NODES=http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703
+VEYA_VALIDATOR_NODES=<validator-1-url>,<validator-2-url>,<validator-3-url>
 ```
 
-Whitespace around URLs is not trimmed at config time. `runConsensus` trims each URL before issuing `fetch`, so `" http://127.0.0.1:7701"` still works at consensus time. Prefer clean comma-separated values anyway so logs and health checks match the live origins.
+Whitespace around URLs is not trimmed at config time. `runConsensus` trims each URL before issuing `fetch`, so `" <validator-1-url>"` still works at consensus time. Prefer clean comma-separated values anyway so logs and health checks match the live origins.
 
 ### Default values
 
 | Key | Default | Override env var |
 |-----|---------|------------------|
-| `rpcUrl` | `https://rpc.testnet.chain.robinhood.com` | `ROBINHOOD_RPC_URL` |
-| `contractAddress` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | `VEYA_CONTRACT_ADDRESS` |
-| `chainId` | `46630` | `ROBINHOOD_CHAIN_ID` |
-| `explorerUrl` | `https://explorer.testnet.chain.robinhood.com` | `ROBINHOOD_EXPLORER_URL` |
-| `validatorNodes` | `http://127.0.0.1:7701`, `7702`, `7703` | `VEYA_VALIDATOR_NODES` |
-| `sealedNodeUrl` | `http://127.0.0.1:7800` | `VEYA_SEALED_NODE_URL` |
-| `payerPrivateKey` | `undefined` | `VEYA_DEPLOYER_PRIVATE_KEY` |
+| `network` | `mainnet` | `ROBINHOOD_NETWORK=testnet` |
+| `rpcUrl` | Mainnet RPC | `ROBINHOOD_MAINNET_RPC_URL` |
+| `contractAddress` | Mainnet protocol contract | `VEYA_MAINNET_CONTRACT_ADDRESS` |
+| `explorerUrl` | Mainnet explorer | `ROBINHOOD_MAINNET_EXPLORER_URL` |
+| `validatorNodes` | `<validator-1-url>`, `<port-2>`, `<port-3>` | `VEYA_VALIDATOR_NODES` |
+| `sealedNodeUrl` | `<sealed-node-url>` | `VEYA_SEALED_NODE_URL` |
+| `payerPrivateKey` | `undefined` | `VEYA_MAINNET_RELAYER_PRIVATE_KEY` on Mainnet, `VEYA_DEPLOYER_PRIVATE_KEY` on Testnet |
 
 There is no default payer. On-chain writes require an explicit key from the constructor or the environment. That is a security decision: a packaged default key would be public and useless on a funded account.
 
 ---
 
-## ROBINHOOD_TESTNET Defaults
+## ROBINHOOD_TESTNET profile (optional)
 
 **File:** `src/chain.ts`
 
-The default network object is the single source of truth for testnet constants. `resolveConfig` imports `ROBINHOOD_TESTNET` rather than duplicating literals.
+`ROBINHOOD_TESTNET` is the Testnet profile. The default client does not use it. `resolveConfig()` with no `network` returns Mainnet. Pass `network: "testnet"` to select the object below. Numeric pins are in [NETWORK_PIN.md](../NETWORK_PIN.md).
 
 ```typescript
-export const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
+export const ROBINHOOD_TESTNET_CHAIN_ID: number; // see src/chain.ts
 
-export const ROBINHOOD_TESTNET = {
+export const ROBINHOOD_MAINNET = {
   chainId: ROBINHOOD_TESTNET_CHAIN_ID,
-  chainIdHex: "0xb626",
+  chainIdHex: ROBINHOOD_MAINNET.chainIdHex,
   name: "Robinhood Chain Testnet",
   rpcUrl: "https://rpc.testnet.chain.robinhood.com",
   explorerUrl: "https://explorer.testnet.chain.robinhood.com",
@@ -259,9 +259,9 @@ Helper functions live beside the constant:
 |----------|----------|
 | `explorerTxUrl(hash, base?)` | Builds `{explorer}/tx/0x...`, inserting `0x` if missing and stripping a trailing slash on the origin. |
 | `explorerAddressUrl(address, base?)` | Builds `{explorer}/address/{address}`. |
-| `isRobinhoodTestnet(chainId)` | Returns true iff `BigInt(chainId) === 46630n`. |
+| `isRobinhoodTestnet(chainId)` | Returns true iff `chainId` equals `ROBINHOOD_TESTNET_CHAIN_ID`. `isRobinhoodMainnet(chainId)` is the Mainnet check. |
 
-Wallet connection flows that add Robinhood Chain to a browser wallet should use `chainIdHex: "0xb626"` together with the RPC and explorer URLs above. The SDK itself does not call `wallet_addEthereumChain`; it talks JSON-RPC through ethers.
+Wallet connection flows that add Robinhood Chain to a browser wallet should use `chainIdHex: ROBINHOOD_MAINNET.chainIdHex` together with the RPC and explorer URLs above. The SDK itself does not call `wallet_addEthereumChain`; it talks JSON-RPC through ethers.
 
 Native currency decimals are 18. Converting a human amount such as `0.01 ETH` to an on-chain spend uses `ethers.parseEther("0.01")`, which yields wei. Do not pass lamports, USDC atomic units, or floating-point numbers into `initSpendingLimit` or `recordSpend`.
 
@@ -277,8 +277,8 @@ No payer is required. This path is the default for local development and CI hash
 import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
-  validatorNodes: ["http://127.0.0.1:7701", "http://127.0.0.1:7702", "http://127.0.0.1:7703"],
-  sealedNodeUrl: "http://127.0.0.1:7800",
+  validatorNodes: ["<validator-1-url>", "<validator-2-url>", "<validator-3-url>"],
+  sealedNodeUrl: "<sealed-node-url>",
 });
 
 const { publicKey, privateKey } = await client.pqKeygen();
@@ -306,9 +306,9 @@ import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
-  rpcUrl: process.env.ROBINHOOD_RPC_URL,
+  rpcUrl: process.env.ROBINHOOD_MAINNET_RPC_URL,
   contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
-  chainId: 46630,
+  chainId: ROBINHOOD_MAINNET.chainId,
 });
 
 const { publicKeyHash, environmentTx, memoTx, explorer } =
@@ -342,29 +342,29 @@ The wallet is an `ethers.Wallet` bound to `ethers.JsonRpcProvider`. The provider
 | Variable | Maps to | Example | Notes |
 |----------|---------|---------|-------|
 | `ROBINHOOD_RPC_URL` | `rpcUrl` | `https://rpc.testnet.chain.robinhood.com` | Dedicated RPC recommended for production |
-| `ROBINHOOD_CHAIN_ID` | `chainId` | `46630` | Parsed with `Number(...)` |
+| `ROBINHOOD_CHAIN_ID` | `chainId` | Testnet profile (Mainnet uses `ROBINHOOD_MAINNET_CHAIN_ID`) | Parsed with `Number(...)` |
 | `ROBINHOOD_EXPLORER_URL` | `explorerUrl` | `https://explorer.testnet.chain.robinhood.com` | No trailing slash |
 | `VEYA_CONTRACT_ADDRESS` | `contractAddress` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Pin per deployment |
-| `VEYA_VALIDATOR_NODES` | `validatorNodes` | `http://a:7701,http://b:7702,http://c:7703` | Comma-separated |
-| `VEYA_SEALED_NODE_URL` | `sealedNodeUrl` | `http://127.0.0.1:7800` | TLS URL in production |
+| `VEYA_VALIDATOR_NODES` | `validatorNodes` | `http://a:<port-1>,http://b:<port-2>,http://c:<port-3>` | Comma-separated |
+| `VEYA_SEALED_NODE_URL` | `sealedNodeUrl` | `<sealed-node-url>` | TLS URL in production |
 | `VEYA_DEPLOYER_PRIVATE_KEY` | `payerPrivateKey` | `0xabc...` 32-byte hex | Never commit |
 
 ### Shell export examples
 
 ```bash
 # Bash / zsh
-export ROBINHOOD_RPC_URL="https://rpc.testnet.chain.robinhood.com"
-export ROBINHOOD_CHAIN_ID="46630"
-export VEYA_CONTRACT_ADDRESS="0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"
-export VEYA_VALIDATOR_NODES="http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703"
-export VEYA_SEALED_NODE_URL="http://127.0.0.1:7800"
+export ROBINHOOD_MAINNET_RPC_URL="https://rpc.mainnet.chain.robinhood.com"
+
+
+export VEYA_VALIDATOR_NODES="<validator-1-url>,<validator-2-url>,<validator-3-url>"
+export VEYA_SEALED_NODE_URL="<sealed-node-url>"
 ```
 
 ```powershell
 # PowerShell
 $env:ROBINHOOD_RPC_URL = "https://rpc.testnet.chain.robinhood.com"
-$env:ROBINHOOD_CHAIN_ID = "46630"
-$env:VEYA_VALIDATOR_NODES = "http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703"
+
+$env:VEYA_VALIDATOR_NODES = "<validator-1-url>,<validator-2-url>,<validator-3-url>"
 ```
 
 Keep `VEYA_DEPLOYER_PRIVATE_KEY` out of shell history where possible. Prefer a secrets manager, a mounted file that the process reads once, or an ephemeral injection at container start.
@@ -373,33 +373,18 @@ Keep `VEYA_DEPLOYER_PRIVATE_KEY` out of shell history where possible. Prefer a s
 
 ## Chain Selection
 
-| Network | `chainId` | `rpcUrl` | `explorerUrl` | `Veya.sol` |
-|---------|-----------|----------|---------------|------------|
-| Robinhood Chain Testnet | `46630` | `https://rpc.testnet.chain.robinhood.com` | `https://explorer.testnet.chain.robinhood.com` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+The default is Mainnet. Pass `network: "testnet"` for Testnet. Numeric ids are in [NETWORK_PIN.md](../NETWORK_PIN.md).
 
-```mermaid
-flowchart TB
-    subgraph Testnet["Robinhood Chain Testnet (default)"]
-        RPC1["ROBINHOOD_RPC_URL"]
-        CID["eth_chainId == 46630"]
-        VEYA["Veya.sol\n0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"]
-        EXP["explorer.testnet.chain.robinhood.com"]
-    end
+| Profile | How to select | `Veya.sol` |
+|---------|---------------|------------|
+| Mainnet | Omit `network` | `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` |
+| Testnet (optional) | `network: "testnet"` or `ROBINHOOD_NETWORK=testnet` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
 
-    RPC1 --> CID
-    CID --> VEYA
-    VEYA --> EXP
-```
-
-`EvmAnchor.ensureRobinhoodChain()` compares `provider.getNetwork().chainId` to `BigInt(this.chainId)`. A mismatch throws:
-
-```
-VEYA SDK expected chain id 46630 (Robinhood Chain), RPC returned <actual>
-```
+`EvmAnchor.ensureRobinhoodChain()` compares the RPC chain id with the selected profile. A mismatch throws before a transaction is sent. The numeric ids are in [NETWORK_PIN.md](../NETWORK_PIN.md).
 
 The check is cached on the instance after the first success (`networkChecked = true`). Construct a new `EvmAnchor` if the RPC URL changes at runtime; do not mutate `provider` in place.
 
-Connecting a wallet to Ethereum mainnet (`1`), a local Anvil (`31337`), or any other EVM while leaving `chainId` at `46630` will fail at the first write. That is correct. The SDK is not a multi-chain router.
+A wallet on another EVM fails the first write when the RPC does not match the selected profile. That is correct. The SDK is not a multi-chain router. Mainnet and Testnet are the two profiles.
 
 ---
 
@@ -423,7 +408,7 @@ Import paths:
 import { VeyaClient, resolveConfig, pq, EvmAnchor } from "@veyanet/sdk";
 import { runConsensus } from "@veyanet/sdk";
 import { protectedExec } from "@veyanet/sdk";
-import { ROBINHOOD_TESTNET, INSTRUCTION_NAMES } from "@veyanet/sdk";
+import { ROBINHOOD_MAINNET, INSTRUCTION_NAMES } from "@veyanet/sdk";
 ```
 
 `INSTRUCTION_NAMES` is a camelCase catalog of `Veya.sol` write functions. Tests assert that `register_environment` is not present. Use these names when logging, when matching ABI entries, and when documenting operator playbooks.
@@ -456,12 +441,12 @@ The ABI is vendored into this package as `src/abi/Veya.json`. Keep that JSON in 
 Typical gitignored local env:
 
 ```env
-ROBINHOOD_RPC_URL=https://rpc.testnet.chain.robinhood.com
-ROBINHOOD_CHAIN_ID=46630
+ROBINHOOD_MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com
+
 ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
-VEYA_CONTRACT_ADDRESS=0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
-VEYA_VALIDATOR_NODES=http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703
-VEYA_SEALED_NODE_URL=http://127.0.0.1:7800
+
+VEYA_VALIDATOR_NODES=<validator-1-url>,<validator-2-url>,<validator-3-url>
+VEYA_SEALED_NODE_URL=<sealed-node-url>
 ```
 
 ### Startup order
@@ -474,8 +459,8 @@ sequenceDiagram
     participant RPC as Robinhood RPC
     participant SDK as @veyanet/sdk
 
-    Op->>Val: alpha 7701, beta 7702, gamma 7703
-    Op->>Seal: sealed-node 7800
+    Op->>Val: alpha <port-1>, beta <port-2>, gamma <port-3>
+    Op->>Seal: sealed-node <sealed-port>
     Op->>SDK: new VeyaClient()
     SDK->>Val: runConsensus()
     SDK->>Seal: protectedExecute()
@@ -484,7 +469,7 @@ sequenceDiagram
 
 1. Start the validator fleet: see [operations/consensus-cluster.md](../operations/consensus-cluster.md).
 2. Start sealed-node: see [operations/sealed-node.md](../operations/sealed-node.md).
-3. Confirm the payer has testnet ETH for gas (wei-denominated).
+3. Confirm the payer has ETH for gas (wei-denominated).
 4. Run SDK tests: `npm install && npm test`.
 
 Local nodes never replace chain id checks. Even when validators run on loopback, `EvmAnchor` still queries `eth_chainId` before the first `Veya.sol` write.
@@ -502,9 +487,9 @@ import { VeyaClient } from "@veyanet/sdk";
 const payerPrivateKey = readFileSync("/run/secrets/deployer.key", "utf8").trim();
 const client = new VeyaClient({
   payerPrivateKey,
-  rpcUrl: process.env.ROBINHOOD_RPC_URL,
+  rpcUrl: process.env.ROBINHOOD_MAINNET_RPC_URL,
   contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
-  chainId: Number(process.env.ROBINHOOD_CHAIN_ID ?? 46630),
+  chainId: Number(process.env.ROBINHOOD_MAINNET_CHAIN_ID ?? ROBINHOOD_MAINNET.chainId),
 });
 ```
 
@@ -514,9 +499,9 @@ Do not log the key. If a process dump is required, redact `payerPrivateKey` and 
 
 | Environment | `rpcUrl` | `chainId` | `contractAddress` | Nodes |
 |-------------|----------|-----------|-------------------|-------|
-| local nodes + testnet settlement | public testnet RPC | `46630` | published `Veya.sol` | loopback 7701–7703, 7800 |
-| staging | dedicated testnet RPC | `46630` | staging deploy if different | 3 VMs on a private NIC |
-| production | dedicated RPC | pinned production chain id | audited `Veya.sol` | 5 validators, threshold still 2 unless the client is changed |
+| local nodes + testnet settlement | public testnet RPC | Testnet profile | published `Veya.sol` | private validator URLs, <sealed-port> |
+| staging | dedicated testnet RPC | Testnet profile | staging deploy if different | 3 VMs on a private NIC |
+| production | dedicated RPC | pinned production chain id | the deployed `Veya.sol` | 5 validators, threshold still 2 unless the client is changed |
 
 Never share `payerPrivateKey` across environments. Rotate on compromise. Spending caps (`PolicyAgentConfig.maxWeiPerAction` and `initSpendingLimit`) must be re-derived in wei for each environment; copying a lamport figure from another stack will under- or over-constrain treasury agents by many orders of magnitude.
 
@@ -555,7 +540,7 @@ Load secrets from HSM, vault, or ephemeral env injection. Restrict file permissi
 
 The JSON-RPC endpoint is a trust boundary. A malicious RPC can lie about receipts, gas, and logs. It cannot change `eth_chainId` without failing `ensureRobinhoodChain` if the operator configured the expected id, but it can still withhold transactions. Use an RPC the operator controls or a provider with a documented SLA.
 
-Validator and sealed nodes are also trust boundaries. They see plaintext payloads (sealed-node after key derivation) or execution inputs (validators). Network isolation matters as much as cryptographic choices. Configuration cannot compensate for a public `7800` bind on a shared host.
+Validator and sealed nodes are also trust boundaries. They see plaintext payloads (sealed-node after key derivation) or execution inputs (validators). Network isolation matters as much as cryptographic choices. Configuration cannot compensate for a public `<sealed-port>` bind on a shared host.
 
 ---
 
@@ -567,7 +552,7 @@ Validator and sealed nodes are also trust boundaries. They see plaintext payload
 | RPC unreachable | ethers network error on first write or read | Retry with backoff; switch provider; do not disable the chain check |
 | Missing payer | `registerPqOnchain` throws | Inject `payerPrivateKey`; keep off-chain methods available |
 | Empty `validatorNodes` | `runConsensus` returns no results, `consensus_reached: false` | Restore the three default origins or a production fleet |
-| Comma-split produced one URL | Env missing commas | Use `http://a:7701,http://b:7702,http://c:7703` |
+| Comma-split produced one URL | Env missing commas | Use `http://a:<port-1>,http://b:<port-2>,http://c:<port-3>` |
 | `chainId` is `NaN` | `BigInt(NaN)` throws inside the chain gate | Set a numeric `ROBINHOOD_CHAIN_ID` |
 | ABI drift vs deployed `Veya.sol` | Revert on unknown selector | Regen `src/abi/Veya.json` from the deployed compiler artifact |
 | Spend configured in lamports | Immediate over-cap or under-cap vs wei intent | Convert with `ethers.parseEther`; use `maxWeiPerAction` |
@@ -593,9 +578,9 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veyanet/sdk` version `1.2.4` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI must match the `Veya.sol` bytecode at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet.
+`@veyanet/sdk` version `1.2.8` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
 
-Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case leftovers from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
+Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case names from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
 Environment variable names listed in this document are the names this package reads.
 
@@ -606,9 +591,9 @@ Environment variable names listed in this document are the names this package re
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `payerPrivateKey required for on-chain ops on Robinhood Chain` | No payer in config | Pass `payerPrivateKey` or use off-chain methods only |
-| `VEYA SDK expected chain id 46630` | RPC is not Robinhood Chain | Point `ROBINHOOD_RPC_URL` at `rpc.testnet.chain.robinhood.com` |
-| `fetch failed` on consensus | Validator nodes not running | Start `validator-node` on ports 7701–7703 |
-| `sealed-node error: 500` | sealed-node not started | Bind sealed-node on `7800` |
+| `VEYA SDK expected chain id …` | RPC is not the selected Robinhood Chain network | Point the RPC at `rpc.mainnet.chain.robinhood.com` (Mainnet) or `rpc.testnet.chain.robinhood.com` (Testnet) |
+| `fetch failed` on consensus | Validator nodes not running | Start `validator-node` on their configured ports |
+| `sealed-node error: 500` | sealed-node not started | Bind sealed-node on `<sealed-port>` |
 | Revert on first write | Wrong `contractAddress` or ABI drift | Pin `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` and refresh `src/abi` |
 | Rate limit / 429 on RPC | Public endpoint saturation | Use a dedicated Robinhood Chain RPC |
 | `validatorNodes` has one URL | Env parse error | Comma-separate without quoting issues |
@@ -619,7 +604,7 @@ Environment variable names listed in this document are the names this package re
 ### Diagnostic script
 
 ```typescript
-import { resolveConfig, ROBINHOOD_TESTNET, isRobinhoodTestnet } from "@veyanet/sdk";
+import { resolveConfig, ROBINHOOD_MAINNET, isRobinhoodTestnet } from "@veyanet/sdk";
 
 const cfg = resolveConfig();
 console.table({
@@ -631,7 +616,7 @@ console.table({
   validators: cfg.validatorNodes.length,
   sealed: cfg.sealedNodeUrl,
   hasPayer: Boolean(cfg.payerPrivateKey),
-  defaultContract: ROBINHOOD_TESTNET.contractAddress,
+  defaultContract: ROBINHOOD_MAINNET.contractAddress,
 });
 ```
 
