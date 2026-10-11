@@ -5,19 +5,18 @@
 | Field | Value |
 |-------|-------|
 | **Canonical ABI in this package** | `src/abi/Veya.json` |
-| **SDK ABI** | `src/abi/Veya.json` |
+| **SDK ABI** | `src/abi/Veya.json` (both deployments) |
 | **Framework** | Solidity `^0.8.20`, ethers v6 client |
+| **Mainnet address** | `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` |
 | **Testnet address** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
-| **chainId** | `46630` |
-| **Status** | Deployed |
+| **Status** | Deployed on Mainnet and Testnet |
+| **What it is** | Protocol contract. Not a token. |
 | **Functions (writes)** | 10 |
 | **Record types** | 9 structs / 9 mappings |
 | **Token interface** | None: **not ERC-20** |
 | **PQ verify** | Off-chain only (chain stores audit artifacts) |
 
 The contract anchors **BLAKE3-256** execution commitments and **ML-DSA-44** signature bytes for permanent audit. EVM gas cannot verify Dilithium at production throughput; auditors use `pq.verifyPQ` in `@veyanet/sdk`. Storage is **mappings keyed by uuid or keccak256**, not program-derived addresses.
-
-**Related:** [storage-layouts.md](./storage-layouts.md) • [types-reference.md](../api/types-reference.md) • [DEPLOYMENT.md](../DEPLOYMENT.md)
 
 ---
 
@@ -124,7 +123,7 @@ Typical SecureEnclave agent path from Node:
 sequenceDiagram
     participant Op as Operator (VeyaClient)
     participant C as Veya.sol
-    participant Val as Validators 7701-7703
+    participant Val as Validators their configured ports
 
     Op->>C: registerEnvironment(uuid, pqHash, type)
     Op->>C: registerAgent(env, agent, role, agentPqHash)
