@@ -7,7 +7,7 @@ Run it:
 ```bash
 npx tsx examples/prove.ts --text "hello"
 npx tsx examples/prove.ts --json examples/proof-sample.json
-npx tsx examples/prove.ts --tx 0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8
+npx tsx examples/prove.ts --network testnet --tx 0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8
 npx tsx examples/prove.ts --text "hello" --anchor --environment <environment-id>
 ```
 
@@ -22,7 +22,7 @@ Without `--anchor`, the command prints the digest, `anchored` is false, and the 
 | `inputKind` | `text`, `json`, or `tx` |
 | `digestHex` | BLAKE3 of the canonical input, or the digest parsed from the receipt |
 | `anchored` | `true` only when the receipt event is `CommitmentStored` |
-| `chainId` | Robinhood Chain testnet `46630` |
+| `chainId` | The selected profile. A default client is Mainnet. A Testnet receipt is read with `network: "testnet"` |
 | `contractAddress` | `Veya.sol` |
 | `txHash` | The receipt, when one was read or written |
 | `explorerUrl` | Explorer link for that receipt |
@@ -31,6 +31,8 @@ Without `--anchor`, the command prints the digest, `anchored` is false, and the 
 | `refusal` | Why the call stopped. `null` on success |
 
 JSON objects are sorted by key, recursively, so the same object always hashes the same. Array order is kept.
+
+A default `prove` call uses Mainnet. The receipt sections below were recorded on Testnet. Read those receipts with `--network testnet`. A default client does not verify them.
 
 ## Text, digest only
 
@@ -43,8 +45,8 @@ Input: `hello`
   "inputKind": "text",
   "digestHex": "ea8f163db38682925e4491c5e58d4bb3506ef8c14eb78a86e908c5624a67200f",
   "anchored": false,
-  "chainId": 46630,
-  "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
+  "chainId": "<network chain id>",
+  "contractAddress": "0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674",
   "txHash": null,
   "explorerUrl": null,
   "event": null,
@@ -78,8 +80,8 @@ Canonical bytes: `{"a":{"c":"x","d":true},"b":1}`
   "inputKind": "json",
   "digestHex": "eb4806af32a2cb606cefbd18e9282fd67c877c221f9467457d685b37d218c383",
   "anchored": false,
-  "chainId": 46630,
-  "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
+  "chainId": "<network chain id>",
+  "contractAddress": "0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674",
   "txHash": null,
   "explorerUrl": null,
   "event": null,
@@ -88,7 +90,7 @@ Canonical bytes: `{"a":{"c":"x","d":true},"b":1}`
 }
 ```
 
-## Verify a receipt already on testnet
+## Verify a receipt from the optional Testnet
 
 Input: `0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8`
 
@@ -99,7 +101,7 @@ Input: `0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8`
   "inputKind": "tx",
   "digestHex": "00961cfda4cf1594532dcd00b935c729b652743fe969761e922f2e2220a195b2",
   "anchored": true,
-  "chainId": 46630,
+  "chainId": "<network chain id>",
   "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
   "txHash": "0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8",
   "explorerUrl": "https://explorer.testnet.chain.robinhood.com/tx/0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8",
@@ -122,7 +124,7 @@ The write returned:
   "inputKind": "text",
   "digestHex": "0ef0a9f7958cb5af050ce74255f88316c188572668b72faa66ddbd8df299540a",
   "anchored": true,
-  "chainId": 46630,
+  "chainId": "<network chain id>",
   "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
   "txHash": "0xbd5ef90696f7b5d37830d28ab7334e7f4311b0db7e4b3c3636feeec6c33ced3e",
   "explorerUrl": "https://explorer.testnet.chain.robinhood.com/tx/0xbd5ef90696f7b5d37830d28ab7334e7f4311b0db7e4b3c3636feeec6c33ced3e",
@@ -145,7 +147,7 @@ A hash with no VEYA log exits non-zero:
   "inputKind": "tx",
   "digestHex": null,
   "anchored": false,
-  "chainId": 46630,
+  "chainId": "<network chain id>",
   "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
   "txHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
   "explorerUrl": "https://explorer.testnet.chain.robinhood.com/tx/0x1111111111111111111111111111111111111111111111111111111111111111",
@@ -154,6 +156,8 @@ A hash with no VEYA log exits non-zero:
   "refusal": "No VEYA log was found on that transaction."
 }
 ```
+
+A receipt that exists and called a different contract returns this same object. `ok` is false, `mode` is `refused`, `anchored` is false, and `txHash` and `explorerUrl` are filled. `refusal` is `transaction did not target Veya.sol — not a VEYA proof`.
 
 `--anchor` with no payer key exits non-zero and does not send a transaction:
 
@@ -164,8 +168,8 @@ A hash with no VEYA log exits non-zero:
   "inputKind": "text",
   "digestHex": "4e40fbbc305e9ccb966dc5d8555bdfe6232b6337d425c806903d8a41efc6be7d",
   "anchored": false,
-  "chainId": 46630,
-  "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
+  "chainId": "<network chain id>",
+  "contractAddress": "0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674",
   "txHash": null,
   "explorerUrl": null,
   "event": null,
@@ -183,8 +187,8 @@ A hash with no VEYA log exits non-zero:
   "inputKind": "text",
   "digestHex": "8906d6c1f84b35ec7a4d1d8700d9c3f69dd27e2e6507c425888f8ab364d38244",
   "anchored": false,
-  "chainId": 46630,
-  "contractAddress": "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84",
+  "chainId": "<network chain id>",
+  "contractAddress": "0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674",
   "txHash": null,
   "explorerUrl": null,
   "event": null,
