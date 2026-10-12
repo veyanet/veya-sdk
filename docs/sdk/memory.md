@@ -2,9 +2,7 @@
 
 **Scoped agent memory with BLAKE3 integrity checks and spend-once nullifier semantics.**
 
-The memory module (`src/memory/nullifier.ts` plus `src/memory/store.ts`) provides integrity-protected local state for agents. Content hashes use BLAKE3. Nullifiers prevent replay. On-chain `flagMemoryNullifier` on `Veya.sol` provides a cross-operator audit record on Robinhood Chain.
-
-**Related:** [coordination.md](./coordination.md) • [pq-crypto.md](./pq-crypto.md) • [evm-anchoring.md](./evm-anchoring.md) • [configuration.md](./configuration.md)
+The memory module (`src/memory/nullifier.ts` plus `src/memory/store.ts`) provides integrity-protected local state for agents. Content hashes use BLAKE3. Nullifiers prevent replay. On-chain `flagMemoryNullifier` on `Veya.sol` provides a cross-operator audit record. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`. `Veya.sol` is a protocol contract, not a token.
 
 ---
 
@@ -398,7 +396,7 @@ const spent = listed.find((e) => e.id === stored.id);
 if (!spent?.nullified) throw new Error("local flag missing");
 ```
 
-After the chain transaction confirms, inspect it on `https://explorer.testnet.chain.robinhood.com`. `ensureRobinhoodChain` will have required `eth_chainId` 46630 on testnet.
+After the chain transaction confirms, inspect it on `https://robinhoodchain.blockscout.com` (Testnet: `https://explorer.testnet.chain.robinhood.com`). `ensureRobinhoodChain` will have checked `eth_chainId` against the selected profile.
 
 ---
 
@@ -454,7 +452,7 @@ Pretty printing (`null, 2`) makes git-style diffs possible for encrypted local h
 
 The environment UUID on the chain flag should match the environment used in `storeMemory`. The contract does not verify that correspondence beyond storing both fields. An application that flags a memory id under the wrong environment still spends the global `memoryId` key. Double-check `uuidToBytes16` mappings in tests.
 
-`EvmAnchor.ensureRobinhoodChain` runs before the flag write. A memory-only local workflow never hits that gate. Mixed workflows (local store plus chain flag) must use a client constructed with `payerPrivateKey` and a RPC that reports chain id 46630 on testnet.
+`EvmAnchor.ensureRobinhoodChain` runs before the flag write. A memory-only local workflow never hits that gate. Mixed workflows (local store plus chain flag) must use a client constructed with `payerPrivateKey` and a RPC that reports on testnet.
 
 Wei spending is adjacent but separate: nullifying memory does not call `recordSpend`. If the memory represented a disbursement intent, call both. If it represented a read-once credential, skip spend accounting.
 
