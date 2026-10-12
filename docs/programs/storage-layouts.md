@@ -2,11 +2,9 @@
 
 **EVM storage for `Veya.sol`: mapping keys, packed structs, and calldata encoding.**
 
-All protocol state lives in **nine mappings** on Robinhood Chain. There are no program-derived addresses and no Borsh account discriminators. Solidity 0.8 packs consecutive value types into 32-byte slots when they fit. PQ public keys are stored as **BLAKE3-32 fingerprints**; full ML-DSA pubkeys remain off-chain. Amounts are **wei**.
+All protocol state lives in **nine mappings**. Mainnet and Testnet share this layout and the same ABI. The default profile is **Mainnet**. There are no program-derived addresses and no Borsh account discriminators. Solidity 0.8 packs consecutive value types into 32-byte slots when they fit. PQ public keys are stored as **BLAKE3-32 fingerprints**; full ML-DSA pubkeys remain off-chain. Amounts are **wei**.
 
 `Veya.sol` is a protocol contract, **not** an ERC-20: there is no `balances` mapping and no allowance slot.
-
-**Related:** [veya-contract.md](./veya-contract.md) • [types-reference.md](../api/types-reference.md) • [DEPLOYMENT.md](../DEPLOYMENT.md)
 
 ---
 
@@ -468,7 +466,7 @@ Re-writing the same `(env, stateId, chunkIndex)` overwrites the chunk.
 | `MAX_SEALED_CHUNK` | 8192 | `public constant` |
 | `MAX_TOOL_NAME_LEN` | 64 | `public constant` |
 
-These do not consume slots 0–8. Call them as views from ethers if an operator wants to confirm they are talking to Veya bytecode.
+These do not consume slots 0–8. Call them as views from ethers if an operator wants to confirm they are talking to VEYA bytecode.
 
 ---
 
