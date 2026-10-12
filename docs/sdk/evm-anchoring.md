@@ -4,8 +4,6 @@
 
 The `EvmAnchor` class (`src/client/evm.ts`) submits real EVM transactions: environment registration, BLAKE3 commitments, PQ attestations, spending, tool policy, memory nullifiers, and sealed-state chunks. PQ verification remains **off-chain**; the contract stores BLAKE3 hashes and ML-DSA signature bytes. Function names are camelCase and match `INSTRUCTION_NAMES`. The ABI is inlined in `src/abi`; the package does not depend on `@veyanet/program`.
 
-**Related:** [configuration.md](./configuration.md) • [pq-crypto.md](./pq-crypto.md) • [sealed-execution.md](./sealed-execution.md) • [memory.md](./memory.md)
-
 ---
 
 ## Table of Contents
@@ -43,7 +41,7 @@ The `EvmAnchor` class (`src/client/evm.ts`) submits real EVM transactions: envir
 
 This document is the operator and integrator reference for on-chain settlement through `@veyanet/sdk`. It covers every write method on `EvmAnchor`, the chain-id gate, wei-denominated spending, and the mapping from TypeScript calls to `Veya.sol` storage. It does not describe validator HTTP or sealed-node HTTP; those are off-chain and only become chain-visible when the operator later calls `attestExecution`, `anchorPqAttestation`, or `storeSealedState`.
 
-The contract address on Robinhood Chain testnet is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`. Explorers live at `https://explorer.testnet.chain.robinhood.com`. Chain id is `46630`. All of those values are defaults in `src/chain.ts` and are re-checked at write time.
+The default profile is **Mainnet**. **Testnet** is `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. Both deployments use the same ABI in `src/abi/Veya.json`. `Veya.sol` is a protocol contract, not a token. Addresses are in [NETWORK_PIN.md](../NETWORK_PIN.md). `EvmAnchor` re-checks `eth_chainId` against the selected profile before a write.
 
 ---
 
@@ -95,7 +93,7 @@ flowchart TB
         H3["publicKeyHashBlake3()"]
     end
 
-    subgraph Chain["Robinhood Chain 46630"]
+    subgraph Chain["Robinhood Robinhood Chain"]
         VEYA["Veya.sol\n0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"]
         EXP["explorer.testnet.chain.robinhood.com"]
     end
@@ -122,7 +120,7 @@ flowchart TB
 | No SHA-256 | BLAKE3 only for commitments |
 | Verify off-chain | Contract stores sig bytes, does not run ML-DSA in the EVM |
 | Standalone client | Direct JSON-RPC to Robinhood Chain |
-| Chain pin | `eth_chainId` must equal configured `chainId` (46630 on testnet) |
+| Chain pin | `eth_chainId` must equal configured `chainId` |
 
 `Veya.sol` is a protocol store. It is not a token, not a DEX, and not a brokerage wrapper. Wallet UIs that treat the address as an ERC-20 will display nonsense. Use the explorer address URL helper when sharing the contract with operators.
 
@@ -135,9 +133,9 @@ import { EvmAnchor } from "@veyanet/sdk";
 
 const anchor = new EvmAnchor({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
-  rpcUrl: process.env.ROBINHOOD_RPC_URL,
+  rpcUrl: process.env.ROBINHOOD_MAINNET_RPC_URL,
   contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
-  chainId: 46630,
+  chainId: ROBINHOOD_MAINNET.chainId,
   explorerUrl: "https://explorer.testnet.chain.robinhood.com",
 });
 ```
@@ -161,7 +159,7 @@ if (!client.evm) throw new Error("EvmAnchor not initialized");
 | `provider` | `ethers.JsonRpcProvider` | JSON-RPC client, **not** `staticNetwork` |
 | `wallet` | `ethers.Wallet` | secp256k1 signer bound to the provider |
 | `contract` | `ethers.Contract` | `Veya.sol` with inlined `VEYA_ABI` |
-| `chainId` | `number` | Expected chain id (default 46630) |
+| `chainId` | `number` | Expected chain id (default Mainnet) |
 | `explorerUrl` | `string` | Origin for `explorerFor(txHash)` |
 | `contractAddress` | `string` | Deployed `Veya.sol` |
 
@@ -219,7 +217,7 @@ sequenceDiagram
 
     App->>EA: registerEnvironment(...)
     EA->>RPC: eth_chainId
-    RPC-->>EA: 0xb626 (46630)
+    RPC-->>EA: chainIdHex
     EA->>RPC: eth_sendRawTransaction
     RPC->>C: function call
     C-->>RPC: logs / revert
@@ -479,7 +477,7 @@ export const INSTRUCTION_NAMES = [
 ] as const;
 ```
 
-These names are camelCase and match `Veya.sol` function names and `VEYA_ABI` entries. Tests in `src/chain.test.ts` assert that every catalog name exists on the ABI and that `register_environment` does not. When adding a Solidity write, update this array, the ABI JSON, and `EvmAnchor` in the same change.
+These names are camelCase and match `Veya.sol` function names and `VEYA_ABI` entries. Tests in `tests/chain.test.ts` assert that every catalog name exists on the ABI and that `register_environment` does not. When adding a Solidity write, update this array, the ABI JSON, and `EvmAnchor` in the same change.
 
 Read methods such as `getEnvironment` are not in the catalog because they do not send transactions. `anchorMemo` and `registerPqIdentity` are SDK facades over catalog writes.
 
@@ -540,7 +538,7 @@ Unknown selectors become `ANCHOR_REVERT` with raw data attached. Call `fromAncho
 
 | Failure | Cause | Recovery |
 |---------|-------|----------|
-| Chain id mismatch | RPC is not Robinhood Chain 46630 (or configured id) | Fix RPC; reconstruct `EvmAnchor` |
+| Chain id mismatch | RPC is not the configured Robinhood Chain id | Fix RPC; reconstruct `EvmAnchor` |
 | `transaction mined without a hash` | Receipt missing hash | Inspect RPC; resubmit only if the nonce did not consume |
 | `EnvironmentAlreadyExists` | UUID collision | Generate a new 16-byte UUID |
 | `CommitmentAlreadyExists` | Same 32-byte digest already stored | Treat as already anchored; do not retry |
@@ -573,14 +571,14 @@ Spending functions do not move ETH. An application that treats `recordSpend` as 
 End-to-end identity plus commitment on Robinhood Chain testnet:
 
 ```typescript
-import { VeyaClient, ROBINHOOD_TESTNET } from "@veyanet/sdk";
+import { VeyaClient, ROBINHOOD_MAINNET } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
-  rpcUrl: ROBINHOOD_TESTNET.rpcUrl,
-  chainId: ROBINHOOD_TESTNET.chainId,
-  contractAddress: ROBINHOOD_TESTNET.contractAddress,
-  explorerUrl: ROBINHOOD_TESTNET.explorerUrl,
+  rpcUrl: ROBINHOOD_MAINNET.rpcUrl,
+  chainId: ROBINHOOD_MAINNET.chainId,
+  contractAddress: ROBINHOOD_MAINNET.contractAddress,
+  explorerUrl: ROBINHOOD_MAINNET.explorerUrl,
 });
 
 const { publicKeyHash, environmentTx, memoTx, explorer } =
@@ -591,7 +589,7 @@ console.log("commitment", explorer.memo);
 console.log("pq hash", publicKeyHash);
 ```
 
-After this returns, both hashes are visible on the explorer. Fund the payer with testnet ETH first. Gas is paid in wei. If `ensureRobinhoodChain` throws, the RPC is not chain `46630` and no transaction was sent.
+After this returns, both hashes are visible on the explorer. Fund the payer with ETH first. Gas is in wei. If `ensureRobinhoodChain` throws, the RPC is not Robinhood Chain and no transaction was sent.
 
 A follow-up spend cap for a registered agent:
 
@@ -615,7 +613,7 @@ await client.evm!.initSpendingLimit(
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Expected chain id 46630 | RPC on another EVM | Use `https://rpc.testnet.chain.robinhood.com` |
+| Expected chain id mismatch | RPC on another EVM | Use the Robinhood Chain RPC for the selected network |
 | `payerPrivateKey required` | Constructed `VeyaClient` without a key | Set `VEYA_DEPLOYER_PRIVATE_KEY` |
 | Invalid private key | JSON byte array supplied | Use hex secp256k1 |
 | Environment explorer 404 | Hash missing `0x` and helper bypassed | Use `explorerFor` / `explorerTxUrl` |
