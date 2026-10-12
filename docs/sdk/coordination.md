@@ -2,9 +2,7 @@
 
 **MCP-style message routing with tool policy enforcement, Kyber sessions, ML-DSA attestations, and wei-denominated spending gates.**
 
-The coordination module routes agent messages with pre-flight ACL checks. In-process policies can mirror on-chain `defineToolPolicy` records on `Veya.sol`. Kyber-768 secures session transport. ML-DSA-44 signs message envelopes off-chain. `PolicyAgent` applies `maxWeiPerAction` using local spending state denominated in wei on Robinhood Chain.
-
-**Related:** [pq-crypto.md](./pq-crypto.md) • [memory.md](./memory.md) • [evm-anchoring.md](./evm-anchoring.md) • [configuration.md](./configuration.md)
+The coordination module routes agent messages with pre-flight ACL checks. In-process policies can mirror on-chain `defineToolPolicy` records on `Veya.sol`. Kyber-768 secures session transport. ML-DSA-44 signs message envelopes off-chain. `PolicyAgent` applies `maxWeiPerAction` using local spending state denominated in wei. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`.
 
 ---
 
