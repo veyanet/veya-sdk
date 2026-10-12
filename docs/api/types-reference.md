@@ -4,9 +4,7 @@
 
 Use this reference when building Node integrations, the hosted API (`https://api.veyanet.tech`), audit tooling, or MCP agents. All new commitments use **BLAKE3-256**. Identity and attestations use **ML-DSA-44**. Coordination sessions use **Kyber-768**. PQ signature verification is **off-chain only**. On-chain types are Solidity structs behind mappings on **Veya.sol**.
 
-Package: `@veyanet/sdk` at `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`.
-
-**Related:** [../README.md](../README.md) • [veya-contract.md](../programs/veya-contract.md) • [storage-layouts.md](../programs/storage-layouts.md) • [DEPLOYMENT.md](../DEPLOYMENT.md)
+Package: `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAnchor`. Config: `resolveConfig`. The default profile is **Mainnet**. **Testnet** is optional: `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. Numeric pins are in [NETWORK_PIN.md](../NETWORK_PIN.md).
 
 ---
 
@@ -88,15 +86,15 @@ flowchart TB
 
 | Name | Value | Location | Description |
 |------|-------|----------|-------------|
-| `ROBINHOOD_TESTNET_CHAIN_ID` | `46630` | `chain.ts` | Decimal chain id |
-| `chainIdHex` | `0xb626` | `ROBINHOOD_TESTNET` | Hex chain id |
+| `ROBINHOOD_TESTNET_CHAIN_ID` | Testnet profile constant | `chain.ts` | Decimal chain id |
+| `chainIdHex` | Hex form of the profile id | `ROBINHOOD_TESTNET` | Hex chain id |
 | `VEYA_CONTRACT_ADDRESS` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | `abi/index.ts` | Protocol contract |
 | `MAX_MLDSA_SIG_LEN` | `4627` | `Veya.sol` | Max Dilithium sig bytes stored |
 | `MAX_SEALED_CHUNK` | `8192` | `Veya.sol` | Max ciphertext per chunk |
 | `MAX_TOOL_NAME_LEN` | `64` | `Veya.sol` | Tool ACL name limit |
 | Default quorum threshold | `2` | `consensus.ts` | 2-of-3 validators |
-| Default validator ports | `7701–7703` | `config.ts` | Local fleet |
-| Default sealed port | `7800` | `config.ts` | sealed-node |
+| Default validator ports | `their configured ports` | `config.ts` | Local fleet |
+| Default sealed port | `<sealed-port>` | `config.ts` | sealed-node |
 | BLAKE3 digest size | `32` bytes | All layers | Commitment width |
 | UUID width | `16` bytes | `bytes16` | environment / agent / memory ids |
 | Native decimals | `18` | ETH on Robinhood Chain | Spend amounts in **wei** |
@@ -110,11 +108,11 @@ There is no program ID constant. The protocol identity is a 20-byte EVM address.
 ## ROBINHOOD_TESTNET
 
 ```typescript
-declare const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
+declare const ROBINHOOD_TESTNET_CHAIN_ID: number;
 
-declare const ROBINHOOD_TESTNET: {
-  readonly chainId: 46630;
-  readonly chainIdHex: "0xb626";
+declare const ROBINHOOD_MAINNET: {
+  readonly chainId: ROBINHOOD_MAINNET.chainId;
+  readonly chainIdHex: ROBINHOOD_MAINNET.chainIdHex;
   readonly name: "Robinhood Chain Testnet";
   readonly rpcUrl: "https://rpc.testnet.chain.robinhood.com";
   readonly explorerUrl: "https://explorer.testnet.chain.robinhood.com";
@@ -126,7 +124,7 @@ declare const ROBINHOOD_TESTNET: {
   readonly contractAddress: "0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84";
 };
 
-type RobinhoodNetwork = typeof ROBINHOOD_TESTNET;
+type RobinhoodNetwork = typeof ROBINHOOD_MAINNET;
 ```
 
 | Field | Meaning |
@@ -139,16 +137,16 @@ type RobinhoodNetwork = typeof ROBINHOOD_TESTNET;
 
 ```typescript
 import {
-  ROBINHOOD_TESTNET,
+  ROBINHOOD_MAINNET,
   ROBINHOOD_TESTNET_CHAIN_ID,
   isRobinhoodTestnet,
 } from "@veyanet/sdk";
 
-isRobinhoodTestnet(46630); // true
+isRobinhoodTestnet; // true
 isRobinhoodTestnet(1n);    // false
 ```
 
-`isRobinhoodTestnet` accepts `number | bigint` and compares with `BigInt(46630)`.
+`isRobinhoodTestnet` accepts `number | bigint` and compares with `BigInt`.
 
 ---
 
@@ -170,11 +168,11 @@ type VeyaClientConfig = {
 |-------|------|----------------------------|-------|
 | `rpcUrl` | `string` | `ROBINHOOD_RPC_URL` or testnet RPC | HTTPS JSON-RPC |
 | `contractAddress` | `string` | `VEYA_CONTRACT_ADDRESS` | 20-byte checksum-optional |
-| `chainId` | `number` | `ROBINHOOD_CHAIN_ID` or `46630` | Compared as `bigint` on-chain |
+| `chainId` | `number` | `ROBINHOOD_MAINNET_CHAIN_ID` or the Mainnet profile | Compared as `bigint` on-chain |
 | `explorerUrl` | `string` | explorer testnet origin | No trailing slash preferred |
 | `payerPrivateKey` | `string` | `VEYA_DEPLOYER_PRIVATE_KEY` | Hex secp256k1; never commit |
-| `validatorNodes` | `string[]` | split `VEYA_VALIDATOR_NODES` or localhost 7701–7703 | Origins, no `/execute` suffix |
-| `sealedNodeUrl` | `string` | `VEYA_SEALED_NODE_URL` or `http://127.0.0.1:7800` | Origin, no `/protected` suffix |
+| `validatorNodes` | `string[]` | split `VEYA_VALIDATOR_NODES` or three validator URLs | Origins, no `/execute` suffix |
+| `sealedNodeUrl` | `string` | `VEYA_SEALED_NODE_URL` or `<sealed-node-url>` | Origin, no `/protected` suffix |
 
 All fields are optional. An empty constructor is valid and yields a client that can hash and call local nodes but cannot write.
 
@@ -202,7 +200,7 @@ Precedence (first wins):
 
 1. Value passed in `config`
 2. Matching environment variable
-3. `ROBINHOOD_TESTNET` / hardcoded localhost nodes
+3. `ROBINHOOD_TESTNET` / hardcoded your host nodes
 
 `VEYA_VALIDATOR_NODES` is split on commas **without trimming in older mental models**: the consensus client **does** `base.trim()` per URL. Prefer no spaces, or rely on trim.
 
@@ -317,7 +315,7 @@ sequenceDiagram
 
     App->>EA: registerEnvironment(...)
     EA->>RPC: eth_chainId
-    RPC-->>EA: 0xb626
+    RPC-->>EA: chainIdHex
     EA->>C: registerEnvironment calldata
     C-->>RPC: receipt
     RPC-->>EA: hash
@@ -351,7 +349,7 @@ const INSTRUCTION_NAMES = [
 type InstructionName = (typeof INSTRUCTION_NAMES)[number];
 ```
 
-`src/chain.test.ts` asserts every `InstructionName` exists on `VEYA_ABI` and that `"register_environment"` is **not** in the list.
+`tests/chain.test.ts` asserts every `InstructionName` exists on `VEYA_ABI` and that `"register_environment"` is **not** in the list.
 
 `EvmAnchor` method names match `InstructionName` one-for-one, plus helpers `getEnvironment`, `anchorMemo`, `registerPqIdentity`, `ensureRobinhoodChain`, `explorerFor`.
 
