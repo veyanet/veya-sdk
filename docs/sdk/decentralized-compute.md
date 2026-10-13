@@ -2,9 +2,7 @@
 
 **Multi-node BLAKE3 quorum with ML-DSA-44 attestations: `runConsensus()` in `@veyanet/sdk`.**
 
-The SDK orchestrates decentralized execution consensus via `src/compute/consensus.ts`. Three independent validator nodes execute identical payloads; **2-of-3** matching BLAKE3 digests constitute agreement. Agreed hashes can later be written to `Veya.sol` through `EvmAnchor.anchorPqAttestation` or `attestExecution` on Robinhood Chain (chain id 46630).
-
-**Related:** [operations/consensus-cluster.md](../operations/consensus-cluster.md) • [pq-crypto.md](./pq-crypto.md) • [evm-anchoring.md](./evm-anchoring.md) • [configuration.md](./configuration.md)
+The SDK orchestrates decentralized execution consensus via `src/compute/consensus.ts`. Three independent validator nodes execute identical payloads; **2-of-3** matching BLAKE3 digests constitute agreement. Agreed hashes can later be written to `Veya.sol` through `EvmAnchor.anchorPqAttestation` or `attestExecution`. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`. A down validator cluster is fail-closed.
 
 ---
 
@@ -47,7 +45,7 @@ Readers should understand quorum as a vote over hashes, not as Byzantine agreeme
 
 Assumptions:
 
-- Default fleet is `http://127.0.0.1:7701`, `7702`, `7703` from `resolveConfig`.
+- Default fleet is `<validator-1-url>`, `<port-2>`, `<port-3>` from `resolveConfig`.
 - Threshold is hardcoded to `2` in `src/compute/consensus.ts`.
 - Nodes are queried **sequentially** in array order.
 - Failed HTTP calls currently propagate as thrown `fetch` errors rather than counting as a `fail` vote, unless the node returns HTTP 200 with `status: "fail"` in `body.result`.
@@ -74,7 +72,7 @@ Assumptions:
 |----------|-------|
 | SDK module | `src/compute/consensus.ts` |
 | Validator HTTP | `POST {base}/execute` |
-| Default nodes | `http://127.0.0.1:7701–7703` |
+| Default nodes | `<validator-1..3-url>` |
 | Default threshold | **2** (2-of-3) |
 | Hash algorithm | BLAKE3-256 |
 | Attestation | ML-DSA-44 detached signatures |
@@ -92,9 +90,9 @@ flowchart TB
     end
 
     subgraph Fleet["Validator Fleet"]
-        V1["alpha :7701\nML-DSA identity"]
-        V2["beta :7702\nML-DSA identity"]
-        V3["gamma :7703\nML-DSA identity"]
+        V1["alpha :<port-1>\nML-DSA identity"]
+        V2["beta :<port-2>\nML-DSA identity"]
+        V3["gamma :<port-3>\nML-DSA identity"]
     end
 
     subgraph Output["ConsensusResult"]
@@ -120,9 +118,9 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant SDK as runConsensus
-    participant A as alpha:7701
-    participant B as beta:7702
-    participant G as gamma:7703
+    participant A as alpha:<port-1>
+    participant B as beta:<port-2>
+    participant G as gamma:<port-3>
 
     SDK->>A: POST /execute {task_id, payload}
     A-->>SDK: NodeResult
@@ -142,9 +140,9 @@ import { runConsensus } from "@veyanet/sdk";
 
 const result = await runConsensus(
   [
-    "http://127.0.0.1:7701",
-    "http://127.0.0.1:7702",
-    "http://127.0.0.1:7703",
+    "<validator-1-url>",
+    "<validator-2-url>",
+    "<validator-3-url>",
   ],
   "task-001",
   { action: "rebalance", bps: 50 },
@@ -238,7 +236,7 @@ The loop is `for (const base of nodeUrls) { await fetch(...) }`. There is no `Pr
 
 Operators who want fail-soft behavior should wrap each node in application code or run a proxy that returns HTTP 200 with `status: "fail"`. Changing the SDK loop to swallow errors would hide outages; the current throw makes missing fleets obvious in development.
 
-Trailing slashes on base URLs produce `http://host:7701//execute` after concatenation. `resolveConfig` defaults do not include trailing slashes. Trim is applied to the base, not to a duplicated slash. Keep origins clean.
+Trailing slashes on base URLs produce `http://host:<port-1>//execute` after concatenation. `resolveConfig` defaults do not include trailing slashes. Trim is applied to the base, not to a duplicated slash. Keep origins clean.
 
 ---
 
@@ -268,7 +266,7 @@ if (client.evm && quorum.agreed_blake3_hash) {
 }
 ```
 
-`ensureRobinhoodChain` runs inside that write and pins chain id 46630 on testnet.
+`ensureRobinhoodChain` runs inside that write and pins on testnet.
 
 ---
 
@@ -354,7 +352,7 @@ On-chain `recordSpend` still uses wei `uint256`. The agreed hash does not includ
 | Wrong hash vs SDK recompute | Canonicalization drift | Hash the same bytes as the node |
 | Trailing slash URL | `//execute` 404 | Origins without trailing slash |
 | One URL from env | Missing commas in `VEYA_VALIDATOR_NODES` | Three comma-separated origins |
-| Anchoring on wrong chain | RPC not 46630 | `ensureRobinhoodChain` on write |
+| Anchoring on wrong chain | RPC chain id differs | `ensureRobinhoodChain` on write |
 
 A hung `fetch` without a timeout can stall the process. Set `AbortSignal.timeout` in a wrapper if the fleet is remote.
 
@@ -376,7 +374,7 @@ Threshold 2 means a 3-node fleet can tolerate one outage **if** `fetch` does not
 
 Not used: `ROBINHOOD_RPC_URL` (consensus is off-chain). RPC appears only at later anchoring.
 
-Default if unset: three loopback ports 7701–7703.
+Default if unset: three private validator URLs.
 
 ---
 
@@ -472,7 +470,7 @@ This wrapper is application code. `src/compute/consensus.ts` stays strict so loc
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| fetch failed 7701 | Node not listening | Start alpha on 7701 |
+| fetch failed <port-1> | Node not listening | Start alpha on <port-1> |
 | False quorum | Two nodes, same bug | Independent implementations / hosts |
 | True disagreement | Nondeterministic payload | Canonical JSON, wei strings |
 | `results.length` 1 | Two nodes skipped | Check `result` wrapping |
