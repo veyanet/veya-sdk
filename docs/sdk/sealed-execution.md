@@ -2,9 +2,7 @@
 
 **Client-side dispatch to `sealed-node` with AES-256-GCM encryption, BLAKE3 commitments, and ML-DSA attestations.**
 
-Protected execution sends sensitive agent payloads across HTTP to an operator-run `sealed-node`. Session keys derive from client entropy and BLAKE3; ciphertext commitments can later anchor on Robinhood Chain via `EvmAnchor.storeSealedState`. The SDK module is `src/sealed/protectedExec.ts`. Default origin is `http://127.0.0.1:7800`.
-
-**Related:** [operations/sealed-node.md](../operations/sealed-node.md) • [pq-crypto.md](./pq-crypto.md) • [evm-anchoring.md](./evm-anchoring.md) • [configuration.md](./configuration.md)
+Protected execution sends sensitive agent payloads across HTTP to an operator-run `sealed-node`. Session keys derive from client entropy and BLAKE3; ciphertext commitments can later anchor on Robinhood Chain via `EvmAnchor.storeSealedState`. The SDK module is `src/sealed/protectedExec.ts`. Default origin is `<sealed-node-url>`. The default settlement profile is **Mainnet**. **Testnet** is `network: "testnet"`. When the sealed node is down, the call fails closed and sends nothing.
 
 ---
 
@@ -47,7 +45,7 @@ Readers should know what AES-256-GCM provides (confidentiality and integrity of 
 
 Assumptions:
 
-- `sealedNodeUrl` comes from `resolveConfig` (`VEYA_SEALED_NODE_URL` or `http://127.0.0.1:7800`).
+- `sealedNodeUrl` comes from `resolveConfig` (`VEYA_SEALED_NODE_URL` or `<sealed-node-url>`).
 - Settlement, if any, is `EvmAnchor.storeSealedState` on Robinhood Chain, not a Solana instruction.
 - Function names on chain are camelCase (`storeSealedState`).
 - Spending and policy checks happen before calling `protectedExec` when the payload can trigger value movement. Sealed execution is not a spending gate.
@@ -77,7 +75,7 @@ flowchart TB
         ENT["sessionEntropy\n32 random bytes"]
     end
 
-    subgraph Node["sealed-node :7800"]
+    subgraph Node["sealed-node :<sealed-port>"]
         HTTP["POST /protected"]
         SEAL["protected_execute"]
         AES["AES-256-GCM encrypt"]
@@ -102,7 +100,7 @@ flowchart TB
 |----------|-------|
 | SDK module | `src/sealed/protectedExec.ts` |
 | Types | `src/sealed/types.ts` |
-| Default URL | `http://127.0.0.1:7800` |
+| Default URL | `<sealed-node-url>` |
 | Endpoint | `POST /protected` |
 | Max on-chain chunk | 8192 bytes (`MAX_SEALED_CHUNK` in `Veya.sol`) |
 | Config field | `sealedNodeUrl` |
@@ -148,7 +146,7 @@ Kyber may wrap session material in advanced deployments. The v1 node derives AES
 ```typescript
 import { protectedExec } from "@veyanet/sdk";
 
-const result = await protectedExec("http://127.0.0.1:7800", {
+const result = await protectedExec("<sealed-node-url>", {
   environmentId: "550e8400-e29b-41d4-a716-446655440000",
   agentId: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
   eventType: "policy_eval",
@@ -360,13 +358,13 @@ Do not store plaintext "for convenience" in a later chunk. Every chunk is cipher
 
 ## Trust Boundary
 
-The sealed node sees `payload_json` in plaintext on the request. Anyone who can read the HTTP path (localhost compromise, missing TLS, reverse-proxy logs) sees agent events.
+The sealed node sees `payload_json` in plaintext on the request. Anyone who can read the HTTP path (your host compromise, missing TLS, reverse-proxy logs) sees agent events.
 
 After sealing, ciphertext is useful for data availability on `Veya.sol`. The chain does not learn the plaintext. The chain does learn that some payer stored some bytes with some BLAKE3 hash at some timestamp.
 
 The node's ML-DSA identity is generated at process start unless the operator persists it. A restart produces a new identity; historical signatures still verify with the old public key if it was recorded. Persist node identities in production so `verified` re-checks remain possible.
 
-`@veyanet/sdk` does not implement a trusted execution environment. "Sealed" names the cryptographic envelope and the operational boundary, not Intel SGX or a hypervisor enclave. Host hardening is an operations concern.
+Sealed execution is the AES-256-GCM envelope around the operator process. Host hardening stays an operations concern.
 
 ---
 
@@ -377,7 +375,7 @@ The node's ML-DSA identity is generated at process start unless the operator per
 | `sealed-node error: 404` | Wrong path or node not exposing `/protected` | Confirm origin; no extra path prefix |
 | `sealed-node error: 400` | Bad entropy hex or malformed JSON | 32-byte entropy; valid `payload` object |
 | `sealed-node error: 500` | Node crypto or execution error | Inspect node logs; restart node |
-| `fetch failed` | Node down | Start sealed-node on 7800 |
+| `fetch failed` | Node down | Start sealed-node on <sealed-port> |
 | Empty `sealed.ciphertext` | Legacy flat response | Upgrade node; do not store empty chunks |
 | `SealedChunkTooLarge` | Chunk > 8192 | Split before `storeSealedState` |
 | `EnvironmentDoesNotExist` | Anchoring before `registerEnvironment` | Register first |
@@ -397,7 +395,7 @@ The node's ML-DSA identity is generated at process start unless the operator per
 - Confirm `blake3_commitment` by hashing ciphertext bytes locally.
 - Convert amounts in payloads to wei decimal strings, not lamports.
 - Pin `VEYA_SEALED_NODE_URL`. Do not accept a node URL from untrusted RPC data.
-- When anchoring, pin Robinhood Chain id 46630 via `EvmAnchor`.
+- When anchoring, pin the Robinhood Chain id via `EvmAnchor`.
 - Redact `payload_json` in reverse-proxy access logs.
 
 ---
@@ -420,10 +418,11 @@ See [operations/sealed-node.md](../operations/sealed-node.md) for binary flags, 
 ## Worked Example
 
 ```typescript
-import { VeyaClient, hashBlake3 } from "@veyanet/sdk";
+import { VeyaClient } from "@veyanet/sdk";
+import { hashBlake3 } from "@veyanet/sdk/pq";
 
 const client = new VeyaClient({
-  sealedNodeUrl: "http://127.0.0.1:7800",
+  sealedNodeUrl: "<sealed-node-url>",
   payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY,
 });
 
@@ -465,7 +464,7 @@ The legacy flat-body parser exists so a single SDK version can talk to a mixed n
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Connection refused :7800 | Node not running | See operations runbook |
+| Connection refused :<sealed-port> | Node not running | See operations runbook |
 | Error 500 after valid JSON | Node identity or AES failure | Restart node; check entropy length |
 | Commitment mismatch | Compared hex of JSON not bytes | Hash `Uint8Array.from(ciphertext)` |
 | Explorer has no sealed event | Never called `storeSealedState` | Anchoring is optional and explicit |
@@ -483,7 +482,7 @@ Log `eventType`, HTTP status, and whether `sealed.ciphertext.length` is non-zero
 
 Latency is node-sign plus AES plus network. A sudden jump usually means the node is regenerating an identity on every request (misconfiguration) or the host is paging. Identity should be loaded once at process start.
 
-When anchoring, log the Robinhood explorer URL from `explorerFor` so operators can confirm `storeSealedState` without copying hashes by hand. Confirm chain id 46630 on testnet before treating a receipt as canonical.
+When anchoring, log the Robinhood explorer URL from `explorerFor` so operators can confirm `storeSealedState` without copying hashes by hand. Confirm on testnet before treating a receipt as canonical.
 
 ---
 
