@@ -2,9 +2,7 @@
 
 **ML-DSA-44, Kyber-768, and BLAKE3 primitives for `@veyanet/sdk`: TypeScript surface aligned with the sealed and validator node identities.**
 
-The `src/pq` module is the TypeScript surface for post-quantum identity, session transport, and commitments. VEYA on Robinhood Chain is **PQ-first**: no SHA-256 on new code paths. `Veya.sol` stores **hashes and signature bytes**; verification runs off-chain in this module. Implementations use `@noble/post-quantum` for ML-DSA-44 and ML-KEM-768, and `hash-wasm` for BLAKE3.
-
-**Related:** [configuration.md](./configuration.md) • [evm-anchoring.md](./evm-anchoring.md) • [coordination.md](./coordination.md) • [sealed-execution.md](./sealed-execution.md)
+The `src/pq` module is the TypeScript surface for post-quantum identity, session transport, and commitments. VEYA on Robinhood Chain is **PQ-first**: no SHA-256 on new code paths. `Veya.sol` stores **hashes and signature bytes**; verification runs off-chain in this module. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`. Implementations use `@noble/post-quantum` for ML-DSA-44 and ML-KEM-768, and `hash-wasm` for BLAKE3.
 
 ---
 
