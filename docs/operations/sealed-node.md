@@ -2,9 +2,7 @@
 
 **HTTP protected execution with AES-256-GCM encryption, BLAKE3 commitments, and ML-DSA attestations: optional data availability on `Veya.sol`.**
 
-The `sealed-node` binary receives execution requests from `@veyanet/sdk` (`protectedExec` / `VeyaClient.protectedExecute`) or other HTTP clients, processes payloads inside the sealed boundary, and returns ciphertext commitments suitable for `storeSealedState` on Robinhood Chain. Default listen port is **7800**. Settlement, when used, targets `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on chain id **46630**, with camelCase ABI methods and wei accounting elsewhere in the protocol.
-
-**Related:** [sdk/sealed-execution.md](../sdk/sealed-execution.md) • [sdk/pq-crypto.md](../sdk/pq-crypto.md) • [sdk/evm-anchoring.md](../sdk/evm-anchoring.md) • [consensus-cluster.md](./consensus-cluster.md)
+The `sealed-node` binary receives execution requests from `@veyanet/sdk` (`protectedExec` / `VeyaClient.protectedExecute`) or other HTTP clients, processes payloads inside the sealed boundary, and returns ciphertext commitments suitable for `storeSealedState`. Default listen port is **<sealed-port>**. The process runs on this machine. There is no public sealed-node URL. Settlement uses `Veya.sol` on the selected profile. The default is **Mainnet**. **Testnet** is `network: "testnet"`. The contract is not a token. When the process is down, the SDK returns a fail-closed result and sends nothing.
 
 ---
 
@@ -42,11 +40,11 @@ The node is not an EVM client. It does not send transactions. Operators who want
 
 ## Audience and Assumptions
 
-Readers should be able to run a release binary on port 7800, generate 32-byte hex entropy from the client, and read SDK errors of the form `sealed-node error: <status>`.
+Readers should be able to run a release binary on port <sealed-port>, generate 32-byte hex entropy from the client, and read SDK errors of the form `sealed-node error: <status>`.
 
 Assumptions:
 
-- SDK origin config is `VEYA_SEALED_NODE_URL` or `http://127.0.0.1:7800`.
+- SDK origin config is `VEYA_SEALED_NODE_URL` or `<sealed-node-url>`.
 - Current SDK normalizes wrapped `{ result: SealedExecResult }` and a legacy flat `blake3_execution_hash` body.
 - Chain writes use `storeSealedState` (camelCase), not a snake_case instruction name.
 - `ensureRobinhoodChain` pins `eth_chainId` before those writes.
@@ -72,9 +70,9 @@ Assumptions:
 | Property | Value |
 |----------|-------|
 | Binary | `sealed-node` |
-| Default port | **7800** |
+| Default port | **<sealed-port>** |
 | Endpoint | `POST /protected` |
-| Default URL | `http://127.0.0.1:7800` |
+| Default URL | `<sealed-node-url>` |
 | Max on-chain chunk | 8192 bytes |
 | SDK module | `src/sealed/protectedExec.ts` |
 
@@ -85,7 +83,7 @@ flowchart TB
         ENT["sessionEntropy\n32 bytes CSPRNG"]
     end
 
-    subgraph Node["sealed-node :7800"]
+    subgraph Node["sealed-node :<sealed-port>"]
         HTTP["POST /protected"]
         PE["protected_execute"]
         AES["AES-256-GCM"]
@@ -114,19 +112,19 @@ Kyber-768 may wrap coordination sessions on the SDK side. Sealed-node v1 derives
 
 ```bash
 cargo build --release -p sealed-node
-./target/release/sealed-node 7800
+./target/release/sealed-node <sealed-port>
 ```
 
 Expected log line:
 
 ```
-sealed-node listening on 127.0.0.1:7800
+sealed-node listening on <sealed-node-url>
 ```
 
 Development shortcut:
 
 ```bash
-cargo run --release -p sealed-node -- 7800
+cargo run --release -p sealed-node -- <sealed-port>
 ```
 
 Port argument:
@@ -137,7 +135,7 @@ sealed-node <port>
 
 If the binary binds `0.0.0.0`, put a firewall in front immediately. Prefer an explicit bind address flag if the binary supports it; otherwise wrap with systemd `IPAddressAllow`.
 
-On Windows, run the same binary in a terminal or as a service; open localhost:7800 only.
+On Windows, run the same binary in a terminal or as a service; open <sealed-node-url> only.
 
 ---
 
@@ -287,7 +285,7 @@ Explorer: `https://explorer.testnet.chain.robinhood.com`.
 | Pattern | When | Notes |
 |---------|------|-------|
 | Loopback only | Development, single-host agent | SDK and node on one machine |
-| Private NIC | Production agent runtime | No public 7800 |
+| Private NIC | Production agent runtime | No public <sealed-port> |
 | TLS reverse proxy | Remote SDK | Terminate TLS; do not log bodies |
 | Dedicated host | Higher isolation | Still not a hardware TEE unless you add one |
 
@@ -307,7 +305,7 @@ After=network.target
 [Service]
 Type=simple
 User=veya
-ExecStart=/usr/local/bin/sealed-node 7800
+ExecStart=/usr/local/bin/sealed-node <sealed-port>
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
@@ -321,13 +319,13 @@ WantedBy=multi-user.target
 
 Add `ReadWritePaths=` for an identity directory. Do not set `VEYA_DEPLOYER_PRIVATE_KEY` in this unit.
 
-Windows: equivalent service, localhost bind, event log without payload bodies.
+Windows: equivalent service, your host bind, event log without payload bodies.
 
 ---
 
 ## Hardening Checklist
 
-- Bind 127.0.0.1 or a private interface.
+- Bind <your-host> or a private interface.
 - TLS if the SDK is not local.
 - Disable proxy body logging.
 - Persist ML-DSA identity with locked-down permissions.
@@ -337,7 +335,7 @@ Windows: equivalent service, localhost bind, event log without payload bodies.
 - Resource limits so `/protected` cannot fill RAM with huge `payload_json`.
 - NTP optional; do not put clocks into AES nonces except through documented derivation.
 
-This node is not Intel SGX. "Sealed" is cryptographic plus operational. If a threat model requires a hardware enclave, that is a different deployment and a different binary attestation story.
+Sealed here means the AES-256-GCM envelope and the operator process boundary. A hardware-enclave deployment would be a different binary and a different attestation story.
 
 ---
 
@@ -348,7 +346,7 @@ Upgrade procedure:
 1. Drain SDK traffic (stop callers).
 2. Snapshot identity files.
 3. Replace binary.
-4. Start on 7800; hit `/protected` with a canary and known entropy.
+4. Start on <sealed-port>; hit `/protected` with a canary and known entropy.
 5. Confirm wrapped `result.sealed.ciphertext` is non-empty.
 6. Confirm BLAKE3 recomputed on the SDK matches `blake3_commitment`.
 
@@ -375,7 +373,7 @@ The node should not read Robinhood RPC. If it does, it is over-privileged.
 
 | Failure | Detection | Recovery |
 |---------|-----------|----------|
-| Bind fail | Port 7800 in use | Other port; update SDK URL |
+| Bind fail | Port <sealed-port> in use | Other port; update SDK URL |
 | 400 on entropy | Length not 64 hex | Fix client |
 | 500 on seal | Identity or AES error | Logs; restart; check identity file |
 | SDK empty ciphertext | Legacy response shape | Upgrade to wrapped `result` |
@@ -394,7 +392,7 @@ A crash after sealing but before the HTTP response leaves ciphertext only in mem
 
 ```typescript
 const client = new VeyaClient({
-  sealedNodeUrl: "http://127.0.0.1:7800",
+  sealedNodeUrl: "<sealed-node-url>",
 });
 
 await client.protectedExecute({
@@ -406,7 +404,7 @@ await client.protectedExecute({
 });
 ```
 
-`VeyaClient` strips trailing slashes on the origin inside `protectedExec`. Do not set `VEYA_SEALED_NODE_URL=http://127.0.0.1:7800/protected`.
+`VeyaClient` strips trailing slashes on the origin inside `protectedExec`. Do not set `VEYA_SEALED_NODE_URL=<sealed-node-url>/protected`.
 
 Policy and consensus should run before this call. The sealed node will process a denied tool if the application sends it.
 
@@ -435,8 +433,8 @@ One node, one URL, is the supported topology for `VEYA_SEALED_NODE_URL`. High av
 Typical production order of operations:
 
 1. Policy (wei cap, tool ACL) on the SDK host.
-2. `runConsensus` against 7701–7703.
-3. `protectedExecute` against 7800 for confidential remainder.
+2. `runConsensus` against their configured ports.
+3. `protectedExecute` against <sealed-port> for confidential remainder.
 4. `storeSealedState` / `attestExecution` on Robinhood Chain.
 
 The sealed node does not call the validators. The validators do not call the sealed node. Mixing those HTTP ports on one bind address is an operational error. Keep `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL` as distinct origins even on a single machine.
@@ -449,7 +447,7 @@ If a payload must not leak to validators, do not put secrets in the consensus `p
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Connection refused 7800 | Not running | Start binary |
+| Connection refused <sealed-port> | Not running | Start binary |
 | `sealed-node error: 404` | Origin included extra path | Origin only |
 | `sealed-node error: 400` | Entropy or JSON | 32 bytes; `payload_json` string |
 | Commitment mismatch | Hashed JSON not bytes | `Uint8Array.from(ciphertext)` |
@@ -462,7 +460,7 @@ If a payload must not leak to validators, do not put secrets in the consensus `p
 Local canary:
 
 ```bash
-curl -sS http://127.0.0.1:7800/protected \
+curl -sS <sealed-node-url>/protected \
   -H "Content-Type: application/json" \
   -d "{\"environment_id\":\"env\",\"agent_id\":\"ag\",\"event_type\":\"ping\",\"payload_json\":\"{\\\"ok\\\":true}\",\"session_entropy_hex\":\"0000000000000000000000000000000000000000000000000000000000000001\"}"
 ```
@@ -479,7 +477,7 @@ Confirm that the sealed host cannot read `VEYA_DEPLOYER_PRIVATE_KEY`. A single s
 
 ---
 
-Port 7800 is conventional. Changing it requires a matching `VEYA_SEALED_NODE_URL`. The SDK will not search other ports.
+Port <sealed-port> is conventional. Changing it requires a matching `VEYA_SEALED_NODE_URL`. The SDK will not search other ports.
 
 Canary entropy must never be reused for real `event_type` values after the canary. Generate a fresh 32-byte CSPRNG value per production call, as `protectedExec` already expects from the caller.
 
@@ -489,7 +487,7 @@ Canary entropy must never be reused for real `event_type` values after the canar
 
 AES-256-GCM at the sealed boundary does not replace TLS on the request path. Both are required when the SDK is not on loopback: TLS for `payload_json` in flight, AES for the returned blob and any later `Veya.sol` chunks.
 
-Do not run sealed-node as Administrator or root. The process only needs bind permission on 7800 and read access to its identity file.
+Do not run sealed-node as Administrator or root. The process only needs bind permission on <sealed-port> and read access to its identity file.
 
 ---
 
