@@ -2,9 +2,7 @@
 
 **Run a production-grade validator fleet for VEYA decentralized compute: 3 nodes, 2-of-3 BLAKE3 quorum, ML-DSA-44 attestations, optional settlement on Robinhood Chain.**
 
-Independent `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veyanet/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. When the application anchors an agreed hash, it writes to `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain testnet (chain id 46630) through `EvmAnchor`, not through a Solana program.
-
-**Related:** [sdk/decentralized-compute.md](../sdk/decentralized-compute.md) • [sdk/pq-crypto.md](../sdk/pq-crypto.md) • [sdk/evm-anchoring.md](../sdk/evm-anchoring.md) • [sdk/configuration.md](../sdk/configuration.md)
+Independent `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veyanet/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. The validators run on this machine. There is no public validator URL. When the application anchors an agreed hash, it writes to `Veya.sol` through `EvmAnchor` on the selected profile. The default is **Mainnet**. **Testnet** is `network: "testnet"`. The contract is not a token. A down cluster is fail-closed.
 
 ---
 
@@ -42,11 +40,11 @@ The fleet is application-level infrastructure. It is not Robinhood Chain consens
 
 ## Audience and Assumptions
 
-Readers should be able to run a Rust release binary, open TCP ports 7701–7703, and set `VEYA_VALIDATOR_NODES` for the SDK. They should understand that SDK `runConsensus` currently fetches nodes sequentially and throws on network errors unless wrapped.
+Readers should be able to run a Rust release binary, open TCP their configured ports, and set `VEYA_VALIDATOR_NODES` for the SDK. They should understand that SDK `runConsensus` currently fetches nodes sequentially and throws on network errors unless wrapped.
 
 Assumptions:
 
-- Default local ports: alpha 7701, beta 7702, gamma 7703.
+- Default local ports: alpha <port-1>, beta <port-2>, gamma <port-3>.
 - Threshold 2 is enforced in the SDK client (`src/compute/consensus.ts`).
 - Settlement uses wei and camelCase `INSTRUCTION_NAMES` when hashes are anchored.
 - `ensureRobinhoodChain` checks `eth_chainId` before those writes.
@@ -75,9 +73,9 @@ flowchart TB
     end
 
     subgraph Fleet["Validator Fleet x3"]
-        V1["validator-node alpha :7701"]
-        V2["validator-node beta :7702"]
-        V3["validator-node gamma :7703"]
+        V1["validator-node alpha :<port-1>"]
+        V2["validator-node beta :<port-2>"]
+        V3["validator-node gamma :<port-3>"]
     end
 
     subgraph Quorum["SDK hash vote"]
@@ -143,22 +141,22 @@ Run crate tests if the workspace provides them. A node that starts and answers `
 ### Manual (three terminals)
 
 ```bash
-cargo run --release -p validator-node -- alpha 7701
-cargo run --release -p validator-node -- beta 7702
-cargo run --release -p validator-node -- gamma 7703
+cargo run --release -p validator-node -- alpha <port-1>
+cargo run --release -p validator-node -- beta <port-2>
+cargo run --release -p validator-node -- gamma <port-3>
 ```
 
 **Arguments:** `<node_id> <port>`
 
 | Node | ID | Default port |
 |------|-----|--------------|
-| Alpha | `alpha` | 7701 |
-| Beta | `beta` | 7702 |
-| Gamma | `gamma` | 7703 |
+| Alpha | `alpha` | <port-1> |
+| Beta | `beta` | <port-2> |
+| Gamma | `gamma` | <port-3> |
 
-Default if omitted: `alpha` on `7701`.
+Default if omitted: `alpha` on `<port-1>`.
 
-Bind to `127.0.0.1` in development. Production should bind a private interface, not `0.0.0.0` on a public IP.
+Bind to `<your-host>` in development. Production should bind a private interface, not `0.0.0.0` on a public IP.
 
 ### Script helper
 
@@ -168,15 +166,15 @@ If the repository ships `scripts/run-consensus-cluster.sh`, use it for local bri
 
 ```bash
 # Terminals 1-3
-cargo run --release -p validator-node -- alpha 7701
-cargo run --release -p validator-node -- beta 7702
-cargo run --release -p validator-node -- gamma 7703
+cargo run --release -p validator-node -- alpha <port-1>
+cargo run --release -p validator-node -- beta <port-2>
+cargo run --release -p validator-node -- gamma <port-3>
 ```
 
 Then from Node:
 
 ```bash
-export VEYA_VALIDATOR_NODES="http://127.0.0.1:7701,http://127.0.0.1:7702,http://127.0.0.1:7703"
+export VEYA_VALIDATOR_NODES="<validator-1-url>,<validator-2-url>,<validator-3-url>"
 ```
 
 The SDK defaults already match those URLs if the env var is unset.
@@ -277,14 +275,14 @@ Minimum checks:
 
 | Check | Method | Expect |
 |-------|--------|--------|
-| Listen | TCP connect to 7701/7702/7703 | Accept |
+| Listen | TCP connect to <port-1>/<port-2>/<port-3> | Accept |
 | Execute ping | `POST /execute` `{ "task_id": "health", "payload": { "action": "ping" } }` | 200 with `result.status` |
 | Hash stability | Same payload twice | Identical `blake3_execution_hash` |
 | Identity stability | Across requests | Same `mldsa_public_key_hex` if advertised |
 
 Alert if hashes for a fixed ping payload change after a deploy; that indicates canonicalization or binary drift.
 
-Do not health-check by sending production payloads. Ping bodies should be boring and side-effect free. Nodes that execute side effects on `/execute` are mis-scoped; hashing and signing should be functional.
+Do not health-check by sending production payloads. Ping bodies should be boring and have no side effects. Nodes that execute side effects on `/execute` are mis-scoped; hashing and signing should be functional.
 
 Metrics to export if the binary allows: request count, sign latency, last hash, process uptime. Scrape from a private network.
 
@@ -302,7 +300,7 @@ After=network.target
 [Service]
 Type=simple
 User=veya
-ExecStart=/usr/local/bin/validator-node alpha 7701
+ExecStart=/usr/local/bin/validator-node alpha <port-1>
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
@@ -315,7 +313,7 @@ Environment=RUST_LOG=info
 WantedBy=multi-user.target
 ```
 
-Repeat for beta/gamma with ports 7702/7703. Use `ProtectHome=true` only if identities are not stored under `/home`. Mount an identity directory with `ReadWritePaths=`.
+Repeat for beta/gamma with ports <port-2>/<port-3>. Use `ProtectHome=true` only if identities are not stored under `/home`. Mount an identity directory with `ReadWritePaths=`.
 
 Windows operators should use a service wrapper that restarts on failure and does not run as a privileged desktop user.
 
@@ -326,7 +324,7 @@ Windows operators should use a service wrapper that restarts on failure and does
 | Control | Guidance |
 |---------|----------|
 | Bind | Private NIC or loopback |
-| TLS | Reverse proxy (nginx/caddy) if leaving localhost |
+| TLS | Reverse proxy (nginx/caddy) if leaving your host |
 | Auth | Mutual TLS or network policy; the binary may not authenticate callers |
 | Payload confidentiality | `/execute` sees plaintext JSON; treat the path as sensitive |
 | Logs | Redact payloads that contain wei amounts and destinations |
@@ -360,9 +358,9 @@ import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
   validatorNodes: [
-    "http://127.0.0.1:7701",
-    "http://127.0.0.1:7702",
-    "http://127.0.0.1:7703",
+    "<validator-1-url>",
+    "<validator-2-url>",
+    "<validator-3-url>",
   ],
 });
 
@@ -389,7 +387,7 @@ await client.evm!.anchorPqAttestation(
 
 That write:
 
-- Calls `ensureRobinhoodChain()` (`eth_chainId` vs configured id, default 46630).
+- Calls `ensureRobinhoodChain()` (`eth_chainId` vs configured id, default: Mainnet profile).
 - Uses inlined `VEYA_ABI` against `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on testnet.
 - Reverts `PqAttestationAlreadyExists` if the execution hash was already stored.
 
@@ -456,25 +454,25 @@ If Robinhood Chain RPC is down, the fleet can continue to produce hashes. Buffer
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Connection refused 7701 | Process not running | Start alpha |
+| Connection refused <port-1> | Process not running | Start alpha |
 | SDK skips a node | Missing `result` wrap | Wrap `NodeResult` |
 | Quorum false, all 200 | Hash mismatch | Canonical JSON; wei strings |
 | Helpful locally, fails in CI | Only one node started | Three processes |
 | Explorer empty | Never anchored | Optional EVM write |
 | `SpendingLimitExceeded` after consensus | Unrelated wei cap | Policy before execute |
-| Windows firewall | Port blocked | Allow 7701–7703 for localhost |
+| Windows firewall | Port blocked | Allow their configured ports for your host |
 | First URL hangs the client | Sequential fetch, no timeout | Health proxy; abort signal wrapper |
 | Hash changed after deploy | Canonicalization drift | Rollback; version the serializer |
 
 Canary payload:
 
 ```bash
-curl -sS http://127.0.0.1:7701/execute \
+curl -sS <validator-1-url>/execute \
   -H "Content-Type: application/json" \
   -d "{\"task_id\":\"health\",\"payload\":{\"action\":\"ping\"}}"
 ```
 
-Repeat against 7702 and 7703. Compare `blake3_execution_hash`.
+Repeat against <port-2> and <port-3>. Compare `blake3_execution_hash`.
 
 ---
 
@@ -486,7 +484,7 @@ Canary hashes should be recorded after every deploy. A ping payload of `{ "actio
 
 Do not fund validator hosts with the `Veya.sol` payer. Consensus hosts hash and sign; they do not send Robinhood Chain transactions. `ensureRobinhoodChain` belongs on the SDK writer, not on the fleet.
 
-Ports 7701–7703 are conventional, not protocol-mandatory. If they change, update `VEYA_VALIDATOR_NODES` in the same change.
+Ports their configured ports are conventional, not protocol-mandatory. If they change, update `VEYA_VALIDATOR_NODES` in the same change.
 
 ---
 
