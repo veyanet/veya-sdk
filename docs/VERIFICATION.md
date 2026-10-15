@@ -5,8 +5,8 @@
 
   **Cryptographic assurance for @veyanet/sdk attestations: ML-DSA-44 and BLAKE3-256, verified off-chain; immutable evidence on Robinhood Chain.**
 
-  [![Chain ID](https://img.shields.io/badge/Chain%20ID-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
-  [![Veya.sol](https://img.shields.io/badge/Veya.sol-protocol-green?style=flat-edge)](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84)
+  [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
+  [![Veya.sol](https://img.shields.io/badge/Veya.sol-protocol-green?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
 
   **[Architecture](./ARCHITECTURE.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)**
 
@@ -16,7 +16,7 @@
 
 `Veya.sol` stores ML-DSA signature bytes and BLAKE3 hashes on Robinhood Chain but **does not verify lattice signatures inside the EVM**. Gas cost cannot run Dilithium at production throughput. This document defines verification workflows for operators, auditors, and integrators who must trust anchored attestations without treating `https://api.veyanet.tech` as an oracle.
 
-The SDK (`@veyanet/sdk`) is the verifier. The hosted API uses the same library. You can complete every procedure below with ethers v6, `@veyanet/sdk/pq`, RPC `https://rpc.testnet.chain.robinhood.com`, and a copy of the agent’s ML-DSA public key.
+The SDK (`@veyanet/sdk`) is the verifier. The hosted API uses the same library. A default client is **Mainnet**. The receipts in this page that use the Testnet explorer were written on **Testnet**. Read them with `network: "testnet"`. A default client does not verify them. `Veya.sol` is a protocol contract, not a token.
 
 | Principle | Implementation |
 |-----------|----------------|
@@ -24,10 +24,10 @@ The SDK (`@veyanet/sdk`) is the verifier. The hosted API uses the same library. 
 | **Off-chain** | ML-DSA verify, BLAKE3 recompute, quorum cross-check |
 | **Commitment algo** | BLAKE3-256 only on SDK paths |
 | **Identity algo** | ML-DSA-44 (NIST FIPS 204) |
-| **Settlement** | Robinhood Chain ID `46630`, ethers v6 |
+| **Settlement** | Robinhood Chain Mainnet (or Testnet when selected), ethers v6 |
 | **Contract** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` (protocol, not a token) |
 
-**Live testnet receipts** (open on the explorer; confirm `to` is Veya.sol):
+**Example Testnet receipts (optional)** (open on the explorer; confirm `to` is Veya.sol):
 
 | Artifact | Transaction |
 |----------|-------------|
@@ -141,7 +141,7 @@ sequenceDiagram
     end
 ```
 
-RPC URL: `https://rpc.testnet.chain.robinhood.com`. Explorer: `https://explorer.testnet.chain.robinhood.com/tx/<hash>`. Chain ID must be `46630`.
+RPC URL: `https://rpc.testnet.chain.robinhood.com`. Explorer: `https://explorer.testnet.chain.robinhood.com/tx/<hash>`. The chain must match the selected profile.
 
 ---
 
@@ -181,7 +181,7 @@ Use this checklist for each attestation under review.
 - [ ] Assert `receipt.status === 1`
 - [ ] Decode logs with `VEYA_ABI`
 - [ ] Archive raw JSON snapshot (BLAKE3-chain audit log recommended)
-- [ ] Confirm `eth_chainId` is `46630`
+- [ ] Confirm `eth_chainId` matches the selected network
 
 ### Phase 2 | Identity binding
 
@@ -224,12 +224,12 @@ Before cryptography, reject garbage.
 ```typescript
 import { ethers } from "ethers";
 import {
-  ROBINHOOD_TESTNET,
+  ROBINHOOD_MAINNET,
   VEYA_CONTRACT_ADDRESS,
   isRobinhoodTestnet,
 } from "@veyanet/sdk";
 
-const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
+const provider = new ethers.JsonRpcProvider(ROBINHOOD_MAINNET.rpcUrl);
 const network = await provider.getNetwork();
 if (!isRobinhoodTestnet(network.chainId)) {
   throw new Error(`not Robinhood testnet: chain ${network.chainId}`);
@@ -348,9 +348,9 @@ When execution flows through validator nodes:
 
 ```mermaid
 flowchart LR
-    P["Canonical payload"] --> N1["Node alpha 7701"]
-    P --> N2["Node beta 7702"]
-    P --> N3["Node gamma 7703"]
+    P["Canonical payload"] --> N1["Node alpha <port-1>"]
+    P --> N2["Node beta <port-2>"]
+    P --> N3["Node gamma <port-3>"]
     N1 --> Q{"2/3 hash match?"}
     N2 --> Q
     N3 --> Q
@@ -463,7 +463,7 @@ npm install && npm test
 npm install && npm run lint
 
 # Funded live path lives in the API tree, not in unit tests
-# https://api.veyanet.tech/scripts/live-ship-check.ts
+# `veya-api-host/backend/scripts/live-ship-check.ts` (operator repo)
 ```
 
 Schedule periodic re-verification of all attestations in the retention window. Re-verification needs archived pubkeys; the chain does not store them.
@@ -501,7 +501,7 @@ async function verifyAttestation(opts: {
 import { runConsensus, pq } from "@veyanet/sdk";
 
 const consensus = await runConsensus(
-  ["http://127.0.0.1:7701", "http://127.0.0.1:7702", "http://127.0.0.1:7703"],
+  ["<validator-1-url>", "<validator-2-url>", "<validator-3-url>"],
   "task-001",
   payload,
 );
@@ -522,9 +522,9 @@ Wire `local` to the on-chain `bytes32` (with or without `0x`) after the receipt 
 
 ```typescript
 import { ethers } from "ethers";
-import { ROBINHOOD_TESTNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS, explorerTxUrl } from "@veyanet/sdk";
+import { ROBINHOOD_MAINNET, VEYA_ABI, VEYA_CONTRACT_ADDRESS, explorerTxUrl } from "@veyanet/sdk";
 
-const provider = new ethers.JsonRpcProvider(ROBINHOOD_TESTNET.rpcUrl);
+const provider = new ethers.JsonRpcProvider(ROBINHOOD_MAINNET.rpcUrl);
 const contract = new ethers.Contract(VEYA_CONTRACT_ADDRESS, VEYA_ABI, provider);
 const iface = new ethers.Interface(VEYA_ABI);
 
@@ -591,7 +591,7 @@ Chain records alone are **insufficient** without off-chain pubkeys. A perfect `b
 | Receipt looks fine, `to` wrong | ETH transfer or other contract | Require Veya.sol address |
 | Stale spend window | Period not rolled in the mapping yet | Re-read after `recordSpend` |
 | Sealed hash mismatch | Declared hash != chunk | Recompute; reject |
-| Wrong chain | RPC not 46630 | Switch endpoint |
+| Wrong chain | RPC chain id differs | Switch endpoint |
 | Duplicate commitment revert | Same digest already stored | That is success from an earlier write: fetch it |
 | Empty `mldsaSig` | Relayer used `storeCommitment` | Verify as commitment + optional PqAttestation |
 
@@ -617,7 +617,7 @@ flowchart TD
 ### First-time auditor setup
 
 1. Install Node 20+. `npm install && npm test`.
-2. Confirm `ROBINHOOD_TESTNET_CHAIN_ID === 46630` and `VEYA_CONTRACT_ADDRESS` matches this document.
+2. Confirm `ROBINHOOD_MAINNET_CHAIN_ID` matches `eth_chainId` and `VEYA_CONTRACT_ADDRESS` matches this document.
 3. Fetch `0x4314faefee6f1c635f91dd075384d4816e10abd84b9bb88e3328b51e630e395d` and assert `to`.
 4. Place agent public keys in a vault the CI runner can read. Do not fetch them from a public JSON bucket without authentication.
 5. Script `inspectTx` + identity + optional `verifyPQ`. Fail the job on throw.
@@ -636,14 +636,14 @@ Archive the old public key against the old `pqHash`. New `registerAgent` (new UU
 
 ### When the relayer is the authority field
 
-That means the hosted wallet paid gas. Agent identity is still the ML-DSA fingerprint. Write both into the audit log: `receipt.from` (payer) and `pqHash` (agent).
+That means the hosted wallet sent the transaction. Agent identity is still the ML-DSA fingerprint. Write both into the audit log: `receipt.from` (payer) and `pqHash` (agent).
 
 ---
 
 ## Invariants
 
 1. A VEYA proof’s `receipt.to` is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
-2. Chain ID of the RPC used to fetch that receipt is `46630` unless the operator documented a different deployed network.
+2. Chain ID of the RPC used to fetch that receipt matches the network where the receipt was written.
 3. `pqPubkeyHash` is BLAKE3(ML-DSA-44 public key bytes).
 4. ML-DSA messages for attestations are 32 raw bytes.
 5. Empty signature + `storeCommitment` is a hash anchor, not a lattice proof.
@@ -682,7 +682,7 @@ That means the hosted wallet paid gas. Agent identity is still the ML-DSA finger
 
 <div align="center">
 
-**@veyanet/sdk Verification**: Off-chain ML-DSA. On-chain hashes. Robinhood Chain ID 46630. Hosted API optional.
+**@veyanet/sdk Verification**: Off-chain ML-DSA. On-chain hashes. Robinhood Chain. Hosted API optional.
 
 [Architecture](./ARCHITECTURE.md) • [Post-Quantum](./POST_QUANTUM.md) • [Quickstart](./QUICKSTART.md)
 
