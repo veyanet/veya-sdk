@@ -6,10 +6,10 @@
   **Bounded autonomous systems on Robinhood Chain: post-quantum identity, sealed execution, and Veya.sol settlement.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../README.md)
-  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.4-cb3837?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.8-cb3837?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green?style=flat-edge)](../package.json)
   [![ethers](https://img.shields.io/badge/ethers-v6-3c3c3d?style=flat-edge)](../package.json)
-  [![Testnet](https://img.shields.io/badge/Robinhood%20Chain-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
+  [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
 
   **[Package README](../README.md)** • **[Deployment](./DEPLOYMENT.md)** • **[Operator surface](./CLI.md)** • **[Types](./api/types-reference.md)** • **[Veya.sol](./programs/veya-contract.md)**
 
@@ -23,24 +23,17 @@ The `docs/` tree is the authoritative reference for **`@veyanet/sdk`**: the Type
 
 Settlement is EVM on Robinhood Chain. `Veya.sol` is a **protocol contract** (environments, agents, attestations, commitments, spending caps, tool policies, memory nullifiers, sealed-state chunks). It is **not** an ERC-20 and it is not a token mint.
 
-No hosted VEYA coordination API is required to use the primitives documented here. Operators run Node scripts against local validator nodes (ports 7701–7703), a sealed node (port 7800), and the public Robinhood Chain testnet JSON-RPC. The optional Rust operator binary `veya-cli` lives in `cli`; this documentation set is about driving `@veyanet/sdk` from Node.
+No hosted VEYA coordination API is required to use the primitives documented here. Operators run Node scripts against local validator nodes, a sealed node, and Robinhood Chain. The default profile is **Mainnet**. **Testnet** is optional: `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. Pins are in [NETWORK_PIN.md](./NETWORK_PIN.md).
 
-### Live Robinhood Chain testnet status
+### Current settlement
 
-`Veya.sol` is **deployed** on Robinhood Chain testnet. Settlement pins live in [NETWORK_PIN.md](./NETWORK_PIN.md) and the vendored ABI at `src/abi/Veya.json`.
+`Veya.sol` is deployed on Mainnet and on Testnet. The ABI is `src/abi/Veya.json`.
 
-| Field | Value |
-|-------|-------|
-| **Network** | Robinhood Chain Testnet |
-| **chainId** | `46630` (`0xb626`) |
-| **Status** | `deployed` |
-| **RPC** | `https://rpc.testnet.chain.robinhood.com` |
-| **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
-| **Veya.sol** | [`0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84) |
-| **Deployer** | `0xa4b900461B265fD1ECdD97792eb3362EEC27bF08` |
-| **Deployed at** | `2026-07-15T16:16:30.000Z` |
-| **Algorithm** | ML-DSA-44 + Kyber-768 + BLAKE3-256 |
-| **Client stack** | ethers v6, `EvmAnchor`, `VeyaClient`, `resolveConfig` |
+| Field | Mainnet (default) | Testnet (optional) |
+|-------|-------------------|---------|
+| **Contract** | [`0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674) | [`0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`](https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84) |
+| **Select** | Omit `network` | `network: "testnet"` |
+| **Client** | ethers v6, `EvmAnchor`, `VeyaClient`, `resolveConfig` | same |
 
 Contract writes are ordinary EVM transactions. Auditors recompute BLAKE3 digests and verify ML-DSA signatures **off-chain**; the contract stores hashes, signature bytes, and policy state for permanent audit.
 
@@ -77,7 +70,7 @@ These constraints apply to every document, code path, and operator workflow in t
 | **Post-quantum security** | ML-DSA-44 identity and attestation; Kyber-768 session transport; BLAKE3 commitments | Package README and `src/pq/` |
 | **Off-chain PQ verification** | EVM gas cannot run ML-DSA at production throughput; chain stores hashes and signature bytes | [programs/veya-contract.md](./programs/veya-contract.md) |
 | **BLAKE3 everywhere** | Execution hashes, pubkey fingerprints, ciphertext commitments | `pq.hashBlake3` |
-| **Chain-id guard** | `EvmAnchor.ensureRobinhoodChain()` refuses writes when `eth_chainId` is not `46630` (or the configured id) | [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| **Chain guard** | `EvmAnchor.ensureRobinhoodChain()` refuses writes when `eth_chainId` does not match the selected profile | [DEPLOYMENT.md](./DEPLOYMENT.md) |
 | **Wei, not another chain’s native unit** | Spending caps on Robinhood Chain are **wei** (18-decimal ETH) | [programs/storage-layouts.md](./programs/storage-layouts.md) |
 
 **Explicit exclusions:** ERC-20 token semantics for `Veya.sol`, and SHA-256 on new commitment paths.
@@ -86,7 +79,7 @@ These constraints apply to every document, code path, and operator workflow in t
 
 ## Documentation Map (Mermaid)
 
-The following diagram shows how guides in this tree relate to the live testnet contract and the SDK modules.
+The following diagram shows how guides in this tree relate to the live Veya.sol contract and the SDK modules.
 
 ```mermaid
 flowchart TB
@@ -124,7 +117,7 @@ flowchart TB
         TYPES["api/types-reference.md"]
     end
 
-    subgraph Live["Live Testnet Proof"]
+    subgraph Live["Testnet example proof"]
         JSON["NETWORK_PIN.md + src/abi"]
         EXPL["explorer.testnet.chain.robinhood.com"]
     end
@@ -170,7 +163,7 @@ flowchart LR
     A5 --> A6[DEPLOYMENT.md]
 ```
 
-**Goal:** Install `@veyanet/sdk`, hash with BLAKE3, optionally write to Robinhood Chain testnet with a funded payer key, run consensus against local validators.
+**Goal:** Install `@veyanet/sdk`, hash with BLAKE3, optionally write to Robinhood Chain with a funded payer key, run consensus against local validators.
 
 ### Path B | Smart contract auditor
 
@@ -192,7 +185,7 @@ flowchart LR
     C3 --> C4[scripts/live-rpc.ts]
 ```
 
-**Goal:** Confirm RPC, chain id, contract bytecode, validator fleet (7701–7703), sealed node (7800), and funded deployer key.
+**Goal:** Confirm RPC, chain id, contract bytecode, validator fleet, sealed node, and funded deployer key.
 
 ### Path D | Policy / MCP runtime developer
 
@@ -222,7 +215,7 @@ flowchart LR
 
 ├── src/
 │   ├── abi/              # Inlined Veya.sol ABI + bytecode (no @veyanet/program dep)
-│   ├── chain.ts          # ROBINHOOD_TESTNET constants, explorer helpers
+│   ├── chain.ts          # ROBINHOOD_MAINNET constants, explorer helpers
 │   ├── config.ts         # VeyaClientConfig, resolveConfig
 │   ├── index.ts          # Public barrel
 │   ├── client/
@@ -266,7 +259,7 @@ Related surfaces (outside this package):
 | Guide | Description |
 |-------|-------------|
 | [../README.md](../README.md) | Package intro, install, five-minute hash + optional on-chain write |
-| [QUICKSTART.md](./QUICKSTART.md) | End-to-end Node walkthrough against Robinhood testnet |
+| [QUICKSTART.md](./QUICKSTART.md) | End-to-end Node walkthrough on Robinhood Chain |
 | [CLI.md](./CLI.md) | Node operator surface: `npm test`, examples, `scripts/doctor.ts`, `scripts/live-rpc.ts` |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Using the deployed contract, funding a payer, validator/sealed cluster, env vars |
 
@@ -372,7 +365,7 @@ Function catalog (camelCase, matching Solidity and `INSTRUCTION_NAMES`): [progra
 | **ethers** | 6.x | JSON-RPC + `Contract` writes |
 | **vitest** | 3.x | `npm test` |
 | **tsup** | 8.x | Dual ESM/CJS build |
-| **Funded testnet ETH** | enough for gas | Required only for `EvmAnchor` writes |
+| **Funded ETH (selected network)** | enough for gas | Required only for `EvmAnchor` writes |
 
 ```bash
 npm install
@@ -394,21 +387,21 @@ Solidity custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, …)
 
 ### Versioning
 
-Package version is **1.2.4** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
+Package version is **1.2.8** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
 
 ### Environment variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ROBINHOOD_RPC_URL` | `https://rpc.testnet.chain.robinhood.com` | JSON-RPC endpoint |
-| `ROBINHOOD_CHAIN_ID` | `46630` | Expected `eth_chainId` |
-| `ROBINHOOD_EXPLORER_URL` | `https://explorer.testnet.chain.robinhood.com` | Explorer origin |
-| `VEYA_CONTRACT_ADDRESS` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Protocol contract |
-| `VEYA_DEPLOYER_PRIVATE_KEY` | unset | Payer hex key for writes (never commit) |
-| `VEYA_VALIDATOR_NODES` | `http://127.0.0.1:7701,7702,7703` | Comma-separated origins |
-| `VEYA_SEALED_NODE_URL` | `http://127.0.0.1:7800` | Sealed execution origin |
+| Variable | When it applies | Purpose |
+|----------|-----------------|---------|
+| `ROBINHOOD_NETWORK` | unset means Mainnet | `testnet` selects Testnet |
+| `VEYA_MAINNET_RELAYER_PRIVATE_KEY` | Mainnet writes | Payer hex key (never commit) |
+| `ROBINHOOD_RPC_URL` | Testnet profile | Testnet JSON-RPC |
+| `VEYA_CONTRACT_ADDRESS` | Testnet profile | Testnet protocol contract |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | Testnet writes | Payer hex key (never commit) |
+| `VEYA_VALIDATOR_NODES` | local fleet | Comma-separated origins on this machine |
+| `VEYA_SEALED_NODE_URL` | local fleet | Sealed execution origin on this machine |
 
-Resolution order is constructor argument, then env, then `ROBINHOOD_TESTNET`. Full table: [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration) and `resolveConfig` in [api/types-reference.md](./api/types-reference.md#veyaclientconfig).
+Unset configuration resolves to Mainnet. Addresses are in [NETWORK_PIN.md](./NETWORK_PIN.md). Full table: [DEPLOYMENT.md](./DEPLOYMENT.md#environment-configuration) and `resolveConfig` in [api/types-reference.md](./api/types-reference.md#veyaclientconfig).
 
 ### Contributing to docs
 
@@ -422,8 +415,9 @@ This package is a TypeScript SDK, not a Rust CLI. Operators drive it from Node:
 
 | Entry | Purpose |
 |-------|---------|
-| `examples/quickstart.ts` | Local BLAKE3 hash; prints default testnet targets |
+| `examples/quickstart.ts` | Local BLAKE3 hash; prints the Mainnet profile |
 | `examples/prove.ts` | Text, JSON, or a receipt hash in; one proof JSON out. See [sdk/proof.md](./sdk/proof.md) |
+| `examples/seal-decision.ts` | An evidence id and a decision object in; one sealed decision out. See [sdk/seal-decision.md](./sdk/seal-decision.md) |
 | `scripts/doctor.ts` | Checks RPC, chain id, contract address, env completeness |
 | `scripts/live-rpc.ts` | Live `eth_chainId` / `eth_getCode` / optional read of `environments` |
 | `npm test` | Vitest: PQ round-trip, chain constants, camelCase ABI names |
@@ -439,7 +433,7 @@ npx tsx scripts/live-rpc.ts
 
 Deep dive: [CLI.md](./CLI.md).
 
-The optional binary `veya` (`veya-cli`) is **not** shipped here. If you need SQLite-backed `veya env create` / `veya consensus run` from a Rust binary, use `cli`. Consensus and sealed HTTP contracts are the same (`POST /execute`, `POST /protected`), so Node `runConsensus` / `protectedExec` are interchangeable with that CLI for fleet smoke checks.
+The optional binary `veya` (`veya-cli`) is **not** shipped here. If you need locally stored `veya env create` / `veya consensus run` from a Rust binary, use `cli`. Consensus and sealed HTTP contracts are the same (`POST /execute`, `POST /protected`), so Node `runConsensus` / `protectedExec` are interchangeable with that CLI for fleet smoke checks.
 
 ---
 
@@ -447,13 +441,13 @@ The optional binary `veya` (`veya-cli`) is **not** shipped here. If you need SQL
 
 | Suite | Command | Scope |
 |-------|---------|-------|
-| SDK unit | `npm test` | BLAKE3 determinism, ML-DSA sign/verify, chain id 46630, ABI camelCase |
+| SDK unit | `npm test` | BLAKE3 determinism, ML-DSA sign/verify, ABI camelCase |
 | Typecheck | `npm run lint` | Public types vs implementation |
 | Operator doctor | `npx tsx scripts/doctor.ts` | Env + RPC + contract code present |
 | Live RPC | `npx tsx scripts/live-rpc.ts` | Real `eth_chainId` against testnet |
 | Quickstart | `npx tsx examples/quickstart.ts` | Hash + print resolved config |
 
-Live writes (`registerEnvironment`, `storeCommitment`, …) require `VEYA_DEPLOYER_PRIVATE_KEY` and a funded testnet wallet. They are not part of `npm test`. The hosted API may run a separate live ship check; this package’s unit tests stay offline so CI does not spend ETH.
+Live writes (`registerEnvironment`, `storeCommitment`, …) require a payer key (`VEYA_MAINNET_RELAYER_PRIVATE_KEY` on Mainnet, `VEYA_DEPLOYER_PRIVATE_KEY` on Testnet) and a funded wallet. They are not part of `npm test`. The hosted API may run a separate live ship check; this package’s unit tests stay offline so CI does not spend ETH.
 
 Verify a mined transaction:
 
@@ -505,7 +499,7 @@ Robinhood Chain is EVM. Dilithium verification inside a Solidity contract is imp
 
 ### How many validator nodes do I need?
 
-Minimum **three** with a **2-of-3** quorum threshold for Byzantine tolerance of one faulty node. Defaults bind `127.0.0.1:7701–7703`.
+Minimum **three** with a **2-of-3** quorum threshold for Byzantine tolerance of one faulty node. Defaults bind `<validator-1..3-url>`.
 
 ### Where are secret keys stored?
 
@@ -517,7 +511,7 @@ Off-chain only. `VEYA_DEPLOYER_PRIVATE_KEY` is an secp256k1 hex key for gas paym
 
 ### How does this package talk to the chain?
 
-This package talks to **mappings** on **Veya.sol** at a 20-byte address on chain id **46630**. Function names are camelCase (`registerEnvironment`). Amounts are wei.
+This package talks to **mappings** on **Veya.sol**. The default profile is **Mainnet**. Function names are camelCase (`registerEnvironment`). Amounts are wei. The contract is not a token.
 
 ### Where do I report security issues?
 
@@ -525,7 +519,7 @@ Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` me
 
 ### Can I point this SDK at Ethereum mainnet or another L2?
 
-`EvmAnchor` will send only if `eth_chainId` matches `config.chainId` (default 46630). Pointing at another EVM by accident is the failure mode the guard exists to prevent. A deliberate override of `chainId` + `rpcUrl` + `contractAddress` is possible but is not the supported product path.
+`EvmAnchor` will send only if `eth_chainId` matches the selected profile. The default is **Mainnet**. Pointing at another EVM by accident is the failure mode the guard exists to prevent. A deliberate override of `chainId` + `rpcUrl` + `contractAddress` is possible but is not the supported product path.
 
 ---
 
@@ -546,7 +540,7 @@ Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` me
 
 <div align="center">
 
-**@veyanet/sdk documentation v1.2.4**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
+**@veyanet/sdk documentation v1.2.8**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
 
 [Deployment](./DEPLOYMENT.md) • [Types](./api/types-reference.md) • [Veya.sol](./programs/veya-contract.md) • [Operator surface](./CLI.md)
 
