@@ -7,7 +7,7 @@
 
   [![NIST FIPS 204](https://img.shields.io/badge/ML--DSA-FIPS%20204-blue?style=flat-edge)](https://csrc.nist.gov/pubs/fips/204/final)
   [![NIST FIPS 203](https://img.shields.io/badge/Kyber-FIPS%20203-purple?style=flat-edge)](https://csrc.nist.gov/pubs/fips/203/final)
-  [![Robinhood Testnet](https://img.shields.io/badge/Chain-46630-blue?style=flat-edge)](https://explorer.testnet.chain.robinhood.com)
+  [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
 
   **[Architecture](./ARCHITECTURE.md)** • **[Verification](./VERIFICATION.md)** • **[Quickstart](./QUICKSTART.md)** • **[README](../README.md)**
 
@@ -17,7 +17,7 @@
 
 `@veyanet/sdk` is built **post-quantum first**. Every new code path in this package uses **ML-DSA-44** for signatures, **Kyber-768** for key encapsulation, and **BLAKE3-256** for commitments. Ethereum secp256k1 remains the chain’s transaction authorization (`msg.sender` on `Veya.sol`); it is not the agent identity algorithm.
 
-This guide explains how each primitive is used in the TypeScript SDK, where verification happens, byte-level sizes, NIST alignment, and how on-chain storage on Robinhood Chain relates to off-chain cryptographic assurance.
+This guide explains how each primitive is used in the TypeScript SDK, where verification happens, byte-level sizes, NIST alignment, and how on-chain storage on Robinhood Chain relates to off-chain cryptographic assurance. The default profile is **Mainnet**. **Testnet** is `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. Receipts on the Testnet explorer stay on Testnet.
 
 Settlement is EVM. Hashes land as `bytes32`. Signature blobs land as `bytes` bounded by `MAX_MLDSA_SIG_LEN = 4627`. The contract does not run Dilithium. Auditors run `verifyPQ`.
 
@@ -26,7 +26,7 @@ Settlement is EVM. Hashes land as `bytes32`. Signature blobs land as `bytes` bou
 ## Table of Contents
 
 1. [Why Post-Quantum First](#why-post-quantum-first)
-2. [Live Testnet Cryptographic Proof](#live-testnet-cryptographic-proof)
+2. [Testnet cryptographic proof (optional example)](#testnet-cryptographic-proof-optional-example)
 3. [Algorithm Selection Matrix](#algorithm-selection-matrix)
 4. [ML-DSA-44 Identity and Attestation](#ml-dsa-44-identity-and-attestation)
 5. [Kyber-768 Session Transport](#kyber-768-session-transport)
@@ -82,14 +82,13 @@ Ethereum ECDSA still pays gas. That is not a PQ identity. Mixing the two on purp
 
 ---
 
-## Live Testnet Cryptographic Proof
+## Testnet cryptographic proof (optional example)
 
 PQ operations are **confirmed on Robinhood Chain testnet**: real contract writes, real receipts, real explorer links.
 
 | Field | Value |
 |-------|-------|
 | **Network** | Robinhood Chain Testnet |
-| **Chain ID** | `46630` |
 | **RPC** | `https://rpc.testnet.chain.robinhood.com` |
 | **Explorer** | `https://explorer.testnet.chain.robinhood.com` |
 | **Veya.sol** | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
@@ -354,9 +353,9 @@ Sealed execution is a **process boundary**, not a homomorphic marketplace.
 | Node authenticity | ML-DSA over execution hash | `mldsa_signature` |
 | Data availability | optional chunk + declared hash | `storeSealedState` |
 
-Full TFHE / FHE compute is **not** claimed as live. If a document says “homomorphic” without naming AES-256-GCM as the current path, it is describing a future module, not this SDK.
+The sealed path uses AES-256-GCM.
 
-Fail-closed: if `:7800` is down, `protectedExec` throws. Painting `verified: true` without a node round-trip is a lie this client will not tell.
+Fail-closed: if `:<sealed-port>` is down, `protectedExec` throws. Painting `verified: true` without a node round-trip is a lie this client will not tell.
 
 ---
 
@@ -381,7 +380,7 @@ flowchart TD
     C -->|yes| D["verifyPQ over 32-byte digest"]
     D -->|fail| F
     D -->|pass| G["Accept agent identity"]
-    G --> H["Separately: receipt.signer paid gas"]
+    G --> H["Separately: receipt.signer sent the tx"]
 ```
 
 Never treat `receipt.from` as a substitute for `pqPubkeyHash`.
@@ -392,7 +391,7 @@ Never treat `receipt.from` as a substitute for `pqPubkeyHash`.
 
 ```
 +------------------------------------------------------------------+
-|                 ON-CHAIN  Veya.sol  chain 46630                  |
+|                 ON-CHAIN  Veya.sol  Robinhood Chain                  |
 |  Store blake3Hash bytes32                                        |
 |  Store mldsaSig bytes length <= 4627                             |
 |  Store pqPubkeyHash bytes32                                      |
@@ -451,7 +450,7 @@ Modules:
 | `src/pq/blake3.ts` | `hashBlake3`, `hashBlake3Bytes` |
 | `src/pq/index.ts` | re-export; also `@veyanet/sdk/pq` subpath |
 
-Tests in `src/pq/pq.test.ts` round-trip sign/verify and hash stability. `src/chain.test.ts` pins network constants so a port cannot silently revert to another chain’s IDs.
+Tests in `tests/pq.test.ts` round-trip sign/verify and hash stability. `tests/chain.test.ts` pins both profiles so a port cannot silently use the other profile’s contract.
 
 Do not add a second PQ library “for browsers” that disagrees on byte lengths. One implementation, two runtimes (Node and whatever bundler consumes ESM).
 
@@ -583,7 +582,7 @@ Then run the TypeScript verifier in [VERIFICATION.md](./VERIFICATION.md).
 | Sealed hash mismatch | Declared hash != BLAKE3(chunk) | Recompute; reject caller hash |
 | Kyber secrets differ | Wrong public key | Encapsulate to the decapsulator’s pk |
 | `CommitmentAlreadyExists` | Same digest written twice | Intended uniqueness; look up original |
-| Chain mismatch | RPC not 46630 | Fix URL; do not disable the guard |
+| Chain mismatch | RPC chain id differs | Fix the RPC URL; keep the guard on |
 
 ```mermaid
 flowchart TD
