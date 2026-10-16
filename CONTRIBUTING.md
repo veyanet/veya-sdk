@@ -12,7 +12,7 @@
 
 ## Philosophy
 
-This package settles on **Robinhood Chain**, not Solana. Contributions must not reintroduce program IDs, PDA helpers, `bs58` payer secrets, or lamports as the native unit. Spending is **wei**. Instruction names are Solidity **camelCase**.
+This package settles on **Robinhood Chain**. The default profile is **Mainnet**. **Testnet** is `network: "testnet"` or `ROBINHOOD_NETWORK=testnet`. `Veya.sol` is a protocol contract, not a token. Contributions must not reintroduce program IDs, PDA helpers, `bs58` payer secrets, or lamports as the native unit. Spending is **wei**. Instruction names are Solidity **camelCase**.
 
 Post-quantum first: new commitment paths use BLAKE3. Identities use ML-DSA-44. Coordination sessions use Kyber-768. Do not add SHA-256 on SDK commitment paths.
 
@@ -52,7 +52,7 @@ Node 20+. Do not commit `.env`.
 
 - Unit: `npm test` (PQ round-trip, chain defaults, operator surfaces)
 - Live RPC: `npx tsx scripts/live-rpc.ts` (needs network)
-- Consensus / sealed: local nodes on 7701–7703 and 7800
+- Consensus / sealed: local nodes on their configured ports and <sealed-port>
 
 A change that claims chain success without talking to Robinhood RPC or Veya.sol will be rejected.
 
@@ -62,7 +62,7 @@ A change that claims chain success without talking to Robinhood RPC or Veya.sol 
 
 1. Describe the risk if the change had shipped wrong.
 2. Name the proof (test, doctor output, explorer tx).
-3. Do not invent chain receipts or stand-in success payloads. If a node did not run, the SDK must throw.
+3. Return real chain receipts only. If a node did not run, throw an error.
 4. Update `docs/` when the public API or chain defaults change.
 
 ---
