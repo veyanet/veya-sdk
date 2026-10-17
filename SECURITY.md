@@ -23,7 +23,7 @@
 
 Do not open public issues for security vulnerabilities. Report privately to **security@veyanet.tech**.
 
-Include: summary, component (`EvmAnchor`, `runConsensus`, `protectedExec`, PQ modules), impact, reproduction, Node version, whether the report is against Robinhood testnet or a local node.
+Include: summary, component (`EvmAnchor`, `runConsensus`, `protectedExec`, PQ modules), impact, reproduction, Node version, whether the report is against Robinhood Chain mainnet, testnet, or a local node.
 
 Acknowledgment target: 72 hours. Coordinated disclosure with the reporter before a public fix is described in [CHANGELOG.md](CHANGELOG.md).
 
@@ -43,8 +43,8 @@ Acknowledgment target: 72 hours. Coordinated disclosure with the reporter before
 
 | Adversary | Mitigation |
 |-----------|------------|
-| Wrong-chain RPC | `ensureRobinhoodChain` / `pingChain` compare `eth_chainId` to 46630 |
-| Sealed node down | `protectedExec` throws; callers must not invent success |
+| Wrong-chain RPC | `ensureRobinhoodChain` / `pingChain` compare `eth_chainId` to the configured chain id |
+| Sealed node down | `protectedExec` throws a clear error |
 | One dishonest validator | 2-of-3 matching BLAKE3 required |
 | Harvest-now against classical identity | ML-DSA-44 + BLAKE3 commitments |
 
@@ -60,4 +60,4 @@ PQ signature verification is off-chain. The contract stores hashes and signature
 
 ## Node hardening
 
-Validator and sealed-node binaries are not this package. Bind them to localhost in development. Do not expose `/execute` or `/protected` on a public interface without an operator access model.
+Validator and sealed-node binaries are not this package. Bind them to your host in development. Do not expose `/execute` or `/protected` on a public interface without an operator access model.
