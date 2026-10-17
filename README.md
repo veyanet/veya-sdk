@@ -6,7 +6,7 @@
   **The official client for post-quantum agent identity, 2-of-3 consensus, sealed execution, and protocol settlement on Robinhood Chain.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.4-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.8-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
 
@@ -33,6 +33,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
 *   **Sealed Execution (AES-256-GCM)**: Execute confidential tasks within a software sealed-node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
 *   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), and tool permissions to the protocol contract via `EvmAnchor`.
 *   **One proof entry**: `proveInput` takes text, canonical JSON, or a receipt hash. A receipt with a `Veya.sol` log returns the explorer link. A hash with no VEYA log is a refusal. Without anchor, the result is the digest and `anchored` is false, and no transaction is sent. Anchor writes one `storeCommitment` only when a funded payer key and an existing environment id are both present, then reads that transaction back. Anchor without a payer key is a refusal and sends nothing. See [docs/sdk/proof.md](./docs/sdk/proof.md).
+*   **One sealed decision**: `sealDecision` takes an evidence id and a decision object. The sealed runtime runs first. If it does not answer, the result is `SEALED_UNREACHABLE` and nothing is sent. If it answers, a 2-of-3 ML-DSA quorum follows. `attestExecution` is sent when `payerPrivateKey` is passed, or when the seal-decision relayer switch is on. See [docs/sdk/seal-decision.md](./docs/sdk/seal-decision.md).
 
 ---
 
@@ -97,8 +98,8 @@ flowchart TB
     end
 
     subgraph ComputeBoundary["Decentralized Fleet & Enclave Runtimes"]
-        ValidatorFleet["Validator Node Fleet (7701-7703)\n2-of-3 Quorum Threshold"]
-        SealedNode["Sealed Node (7800)\nAES-256-GCM Engine"]
+        ValidatorFleet["Validator Node Fleet\n2-of-3 Quorum Threshold"]
+        SealedNode["Sealed Node\nAES-256-GCM Engine"]
         ConsensusEngine["Consensus Engine\nML-DSA Signature Check"]
     end
 
@@ -121,8 +122,8 @@ flowchart TB
     PolicyCheck -->|"Store Digest Only"| StateDB
 
     %% Compute Execution
-    PolicyCheck -->|"Quorum Task (7701-7703)"| ValidatorFleet
-    PolicyCheck -->|"Protected Task (7800)"| SealedNode
+    PolicyCheck -->|"Quorum Task"| ValidatorFleet
+    PolicyCheck -->|"Protected Task"| SealedNode
     ValidatorFleet --> ConsensusEngine
     SealedNode --> ConsensusEngine
 
@@ -174,26 +175,29 @@ const client = new VeyaClient();
 
 // 2. Custom Instantiation with Payer Private Key & Custom Node Fleet
 const clientWithFleet = new VeyaClient({
-  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
+  payerPrivateKey: process.env.VEYA_MAINNET_RELAYER_PRIVATE_KEY,
   validatorNodes: [
-    "http://127.0.0.1:7701",
-    "http://127.0.0.1:7702",
-    "http://127.0.0.1:7703",
+    "<validator-1-url>",
+    "<validator-2-url>",
+    "<validator-3-url>",
   ],
-  sealedNodeUrl: "http://127.0.0.1:7800",
+  sealedNodeUrl: "<sealed-node-url>",
 });
 ```
 
 ### Environment Variables Reference
 
+The default profile is **Mainnet**. `network: "testnet"` or `ROBINHOOD_NETWORK=testnet` selects **Testnet**. Addresses and RPC URLs are in [docs/NETWORK_PIN.md](./docs/NETWORK_PIN.md).
+
 | Variable Name | Description | Default / Fallback |
 |---------------|-------------|--------------------|
-| `ROBINHOOD_RPC_URL` | Network JSON-RPC Endpoint | Public testnet RPC |
-| `ROBINHOOD_CHAIN_ID` | Network Chain ID | `46630` |
-| `ROBINHOOD_EXPLORER_URL` | Block Explorer Base URL | Public testnet explorer |
-| `VEYA_DEPLOYER_PRIVATE_KEY` | Payer Private Key (`0x` hex string) | `undefined` (Read-only client) |
-| `VEYA_VALIDATOR_NODES` | Comma-separated validator URLs | `http://127.0.0.1:7701,7702,7703` |
-| `VEYA_SEALED_NODE_URL` | Sealed Node Service URL | `http://127.0.0.1:7800` |
+| `ROBINHOOD_NETWORK` | Profile | Mainnet. `testnet` selects Testnet |
+| `ROBINHOOD_MAINNET_RPC_URL` | Mainnet JSON-RPC | Public Mainnet RPC |
+| `ROBINHOOD_RPC_URL` | Testnet JSON-RPC (used when `ROBINHOOD_NETWORK=testnet`) | Public Testnet RPC |
+| `VEYA_MAINNET_RELAYER_PRIVATE_KEY` | Mainnet payer | unset (read-only until set) |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | Testnet payer | unset (read-only until set) |
+| `VEYA_VALIDATOR_NODES` | Comma-separated validator URLs | `<validator-1-url>,<validator-2-url>,<validator-3-url>` |
+| `VEYA_SEALED_NODE_URL` | Sealed Node Service URL | `<sealed-node-url>` |
 
 ---
 
@@ -268,7 +272,7 @@ Submit commitments, register environments, set spending limits (in wei), and fla
 import { VeyaClient } from "@veyanet/sdk";
 
 const client = new VeyaClient({
-  payerPrivateKey: process.env.VEYA_DEPLOYER_PRIVATE_KEY!,
+  payerPrivateKey: process.env.VEYA_MAINNET_RELAYER_PRIVATE_KEY,
 });
 
 // Access EvmAnchor instance
@@ -334,7 +338,7 @@ runQuickstart();
 
 ## 🔒 Advanced Cryptography Implementation
 
-The `@veyanet/sdk` abstracts complex cryptographic operations to guarantee client-side zero-knowledge boundaries and quantum resilience:
+The `@veyanet/sdk` abstracts complex cryptographic operations to guarantee client-side BLAKE3 digests and ML-DSA signatures and quantum resilience:
 
 ### 1. ML-DSA-44 Post-Quantum Identity (FIPS 204)
 *   **Algorithm**: Module-Lattice-Based Digital Signature Algorithm (ML-DSA-44).
@@ -439,7 +443,7 @@ The SDK consensus engine requires agreement from **2 of 3** validator nodes. If 
 
 ### Contribution Standards
 We welcome contributions to `@veyanet/sdk`. To maintain security integrity, all Pull Requests are subject to code audits:
-*   **Zero-Knowledge Boundary Enforcement**: Any changes that log plaintext secrets, bypass client-side digests, or expose private key material will be rejected immediately.
+*   **Client-Side Boundary Enforcement**: Any changes that log plaintext secrets, bypass client-side digests, or expose private key material will be rejected immediately.
 *   **Cryptographic Reviews**: Modifications to post-quantum key generation, BLAKE3 hashing, or AES parameters require core security review.
 
 ### Vulnerability Disclosure Policy
