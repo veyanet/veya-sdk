@@ -578,7 +578,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veyanet/sdk` version `1.2.8` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
+`@veyanet/sdk` version `1.2.9` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case names from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
