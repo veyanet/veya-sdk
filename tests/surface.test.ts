@@ -12,8 +12,8 @@ import {
 } from "../src/index.js";
 
 describe("SDK surface", () => {
-  it("pins package version 1.2.8 and honesty card", () => {
-    expect(SDK_VERSION).toBe("1.2.8");
+  it("pins package version 1.2.9 and honesty card", () => {
+    expect(SDK_VERSION).toBe("1.2.9");
     expect(SDK_SURFACE.sealed).toBe("AES-256-GCM");
     expect(SDK_SURFACE.sealed).toBe("AES-256-GCM");
     expect(SDK_SURFACE.settlement).toBe("mainnet");
