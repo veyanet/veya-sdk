@@ -8,6 +8,11 @@ This package settles on Robinhood Chain through `Veya.sol`, a protocol contract 
 
 ---
 
+## [1.2.9] — 2026-10-25
+
+### Changed
+- Package version **1.2.9**, released together with `@veyanet/mcp` 1.2.9 (Paid Call Guard). No API change.
+
 ## [1.2.8] — 2026-10-17
 
 ### Fixed (launch)
