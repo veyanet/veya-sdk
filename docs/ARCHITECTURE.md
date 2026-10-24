@@ -7,7 +7,7 @@
 
   [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
   [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
-  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.8-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.9-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
 
   **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
@@ -446,7 +446,7 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
-The API depends on `"@veyanet/sdk": "^1.2.8"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+The API depends on `"@veyanet/sdk": "^1.2.9"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
 
 ---
 
