@@ -6,7 +6,7 @@
   **The official client for post-quantum agent identity, 2-of-3 consensus, sealed execution, and protocol settlement on Robinhood Chain.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.8-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.9-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
 
