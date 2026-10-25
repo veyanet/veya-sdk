@@ -177,7 +177,7 @@ Use this checklist for each attestation under review.
 
 - [ ] Record the Robinhood Chain transaction hash
 - [ ] Fetch the full receipt via ethers `getTransactionReceipt`
-- [ ] Assert `receipt.to` equals `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` (checksum-insensitive compare)
+- [ ] Assert `receipt.to` equals `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` (checksum-insensitive compare)
 - [ ] Assert `receipt.status === 1`
 - [ ] Decode logs with `VEYA_ABI`
 - [ ] Archive raw JSON snapshot (BLAKE3-chain audit log recommended)
@@ -243,7 +243,7 @@ function assertVeyaReceipt(receipt: ethers.TransactionReceipt) {
 }
 ```
 
-`explorerTxUrl(hash)` builds `https://explorer.testnet.chain.robinhood.com/tx/0x…`. Humans can click it; machines still fetch RPC. Do not accept a screenshot of the explorer as the only artifact.
+`explorerTxUrl(hash)` builds `https://robinhoodchain.blockscout.com/tx/0x…`. Humans can click it; machines still fetch RPC. Do not accept a screenshot of the explorer as the only artifact.
 
 A known-good baseline:
 
@@ -642,7 +642,7 @@ That means the hosted wallet sent the transaction. Agent identity is still the M
 
 ## Invariants
 
-1. A VEYA proof’s `receipt.to` is `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
+1. A VEYA proof’s `receipt.to` is `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`.
 2. Chain ID of the RPC used to fetch that receipt matches the network where the receipt was written.
 3. `pqPubkeyHash` is BLAKE3(ML-DSA-44 public key bytes).
 4. ML-DSA messages for attestations are 32 raw bytes.
