@@ -226,7 +226,7 @@ Mainnet RPC is the SDK default. For Testnet, set:
 ```bash
 export ROBINHOOD_MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com
 
-export ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
+export ROBINHOOD_EXPLORER_URL=https://robinhoodchain.blockscout.com
 ```
 
 | Setting | Recommended | Avoid |
@@ -320,7 +320,7 @@ Every write goes through `send()` → `ensureRobinhoodChain()` → `tx.wait()`. 
 
 ## Redeploying Veya.sol
 
-Redeploy only when you intend to replace the protocol address. Existing mapping state at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` does **not** migrate automatically.
+Redeploy only when you intend to replace the protocol address. Existing mapping state at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` does **not** migrate automatically.
 
 ### Source of truth
 
@@ -527,7 +527,7 @@ flowchart TD
 ```bash
 export ROBINHOOD_MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com
 
-export ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
+export ROBINHOOD_EXPLORER_URL=https://robinhoodchain.blockscout.com
 
 export VEYA_DEPLOYER_PRIVATE_KEY=0x...          # writes only
 export VEYA_VALIDATOR_NODES=<validator-1-url>,<validator-2-url>,<validator-3-url>
@@ -670,7 +670,7 @@ Spending-limit **application** amounts (treasury caps) are independent of **gas*
 
 - [ ] `ROBINHOOD_RPC_URL` reachable
 - [ ] `eth_chainId` matches the selected profile
-- [ ] `eth_getCode` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` is non-empty
+- [ ] `eth_getCode` at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` is non-empty
 - [ ] `npx tsx scripts/doctor.ts` exits 0
 - [ ] `npx tsx scripts/live-rpc.ts` exits 0
 - [ ] `npx tsx examples/quickstart.ts` prints digest + defaults
