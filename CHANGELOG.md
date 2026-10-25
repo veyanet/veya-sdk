@@ -8,6 +8,23 @@ This package settles on Robinhood Chain through `Veya.sol`, a protocol contract 
 
 ---
 
+## [1.2.10] — 2026-10-25
+
+Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.11. No runtime API changes.
+
+### Changed
+- Package version **1.2.10** across `package.json`, `SDK_VERSION`, the README badges, the CLI guide, the quickstart and the configuration reference.
+- Integration snippets now reference `"@veyanet/sdk": "^1.2.10"`.
+- Example key loading no longer relies on a fixed file path; examples read the key location from configuration.
+
+### Fixed
+- Documentation pages that still presented the Testnet contract (`0x1a1Dc3c5…5d84`) as the default now show the Mainnet `Veya.sol` (`0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`) and the Mainnet explorer. Testnet values remain wherever a page explicitly describes Testnet.
+- `docs/sdk/pq-crypto.md` now names both networks in the worked ML-DSA registration path instead of implying Testnet only.
+- The `ROBINHOOD_TESTNET` profile listing in `docs/sdk/configuration.md` shows the Testnet object; it was previously mislabelled as `ROBINHOOD_MAINNET`.
+- Contract references corrected in `ARCHITECTURE.md`, `CLI.md`, `DEPLOYMENT.md`, `VERIFICATION.md`, the operations guides (`consensus-cluster.md`, `sealed-node.md`), `storage-layouts.md`, and the SDK guides for coordination, decentralized compute, EVM anchoring and sealed execution.
+
+---
+
 ## [1.2.9] — 2026-10-25
 
 ### Changed
