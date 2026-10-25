@@ -238,9 +238,9 @@ There is no default payer. On-chain writes require an explicit key from the cons
 ```typescript
 export const ROBINHOOD_TESTNET_CHAIN_ID: number; // see src/chain.ts
 
-export const ROBINHOOD_MAINNET = {
+export const ROBINHOOD_TESTNET = {
   chainId: ROBINHOOD_TESTNET_CHAIN_ID,
-  chainIdHex: ROBINHOOD_MAINNET.chainIdHex,
+  chainIdHex: string, // see src/chain.ts
   name: "Robinhood Chain Testnet",
   rpcUrl: "https://rpc.testnet.chain.robinhood.com",
   explorerUrl: "https://explorer.testnet.chain.robinhood.com",
@@ -329,7 +329,7 @@ if (client.evm) {
     "e222a4812bace5608fd743318c2cb0f05cd8de4196f8cf09ffa195734c99d2a0",
   );
   console.log(client.explorerFor(tx));
-  // https://explorer.testnet.chain.robinhood.com/tx/0x...
+  // https://robinhoodchain.blockscout.com/tx/0x...
 }
 ```
 
@@ -443,7 +443,7 @@ Typical gitignored local env:
 ```env
 ROBINHOOD_MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com
 
-ROBINHOOD_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com
+ROBINHOOD_EXPLORER_URL=https://robinhoodchain.blockscout.com
 
 VEYA_VALIDATOR_NODES=<validator-1-url>,<validator-2-url>,<validator-3-url>
 VEYA_SEALED_NODE_URL=<sealed-node-url>
@@ -484,7 +484,7 @@ Local nodes never replace chain id checks. Even when validators run on loopback,
 import { readFileSync } from "node:fs";
 import { VeyaClient } from "@veyanet/sdk";
 
-const payerPrivateKey = readFileSync("/run/secrets/deployer.key", "utf8").trim();
+const payerPrivateKey = readFileSync(process.env.DEPLOYER_KEY_FILE!, "utf8").trim();
 const client = new VeyaClient({
   payerPrivateKey,
   rpcUrl: process.env.ROBINHOOD_MAINNET_RPC_URL,
@@ -578,7 +578,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veyanet/sdk` version `1.2.9` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
+`@veyanet/sdk` version `1.2.10` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case names from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
