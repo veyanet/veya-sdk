@@ -393,7 +393,7 @@ That write:
 
 Alternatively `attestExecution` stores ML-DSA bytes (max 4627). Pick one or both depending on whether auditors need signatures on chain or only hashes.
 
-Explorer: `https://explorer.testnet.chain.robinhood.com/tx/<hash>`.
+Explorer: `https://robinhoodchain.blockscout.com/tx/<hash>`.
 
 Spending remains wei. Consensus does not move ETH.
 
