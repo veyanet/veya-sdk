@@ -9,7 +9,7 @@ The optional binary `veya` (`veya-cli`) lives in **`cli`**. Use it if you want l
 | Field | Value |
 |-------|-------|
 | **Package** | `@veyanet/sdk` |
-| **Version** | 1.2.9 |
+| **Version** | 1.2.10 |
 | **Runtime** | Node.js 20+ |
 | **Crypto** | ML-DSA-44, Kyber-768, BLAKE3-256 |
 | **Chain** | Mainnet by default. Testnet is explicit |
@@ -52,7 +52,7 @@ npm test
 npm run build
 ```
 
-The hosted API consumes the package as `"@veyanet/sdk": "^1.2.9"`. After `npm run build`, `dist/` is what Node resolves.
+The hosted API consumes the package as `"@veyanet/sdk": "^1.2.10"`. After `npm run build`, `dist/` is what Node resolves.
 
 ### Run examples without a global install
 
@@ -654,7 +654,7 @@ Validators and sealed-node binaries are still the VEYA node runtimes; only the *
 | `CommitmentAlreadyExists` | Same 32-byte digest | Use a new commitment |
 | vitest ABI failure | `Veya.json` stale | Recompile Solidity and refresh ABI |
 | `hash-wasm` / WASM load | Node too old | Upgrade to Node 20+ |
-| Empty `eth_getCode` | Wrong address | Confirm `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` |
+| Empty `eth_getCode` | Wrong address | Confirm `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` |
 
 ---
 
