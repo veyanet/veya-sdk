@@ -7,7 +7,7 @@
 
   [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
   [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
-  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.9-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.10-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
 
   **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
@@ -334,7 +334,7 @@ The on-chain contract exposes exactly **10 write functions** (ABI names are Soli
 | 9 | `flagMemoryNullifier` | `nullifiers[memoryId]` | Mark memory entry as consumed |
 | 10 | `storeSealedState` | `sealedStates[keccak256(env, state, idx)]` | Store sealed ciphertext chunk |
 
-Contract address: `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on Robinhood Chain.
+Contract address: `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` on Robinhood Chain.
 
 ### TypeScript modules (`src`)
 
@@ -446,7 +446,7 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
-The API depends on `"@veyanet/sdk": "^1.2.9"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+The API depends on `"@veyanet/sdk": "^1.2.10"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
 
 ---
 
@@ -954,7 +954,7 @@ flowchart TD
 
 Audit checklist:
 
-1. Confirm receipt `to` equals `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`
+1. Confirm receipt `to` equals `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`
 2. Confirm `status === 1` and logs decode to the expected event
 3. Verify BLAKE3 digest matches off-chain recomputation
 4. Verify ML-DSA signature over digest when sig bytes are present
@@ -1007,7 +1007,7 @@ The following statements are true of a correctly configured `@veyanet/sdk` deplo
 | **Quorum** | Minimum agreeing validator count (default 2 of 3) |
 | **Relayer** | Optional `https://api.veyanet.tech` wallet that pays gas using this SDK |
 | **Sealed execution** | AES-encrypted payload processing with commitment output |
-| **Veya.sol** | Protocol contract at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`: not a token |
+| **Veya.sol** | Protocol contract at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`: not a token |
 | **Wei** | 1e-18 ETH; unit of `initSpendingLimit` / `recordSpend` |
 
 ---
