@@ -1,6 +1,6 @@
 {
   "name": "@veyanet/sdk",
-  "version": "1.2.9",
+  "version": "1.2.10",
   "description": "VEYA TypeScript SDK for Robinhood Chain — PQ identity, AES-256-GCM sealed exec, 2-of-3 consensus, Veya.sol anchoring. Default profile is Mainnet.",
   "license": "MIT",
   "type": "module",
