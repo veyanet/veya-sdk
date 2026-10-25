@@ -34,7 +34,7 @@ The coordination module routes agent messages with pre-flight ACL checks. In-pro
 
 ## Purpose and Scope
 
-Coordination is **off-chain** and **PQ-first**. It answers: may this agent invoke this tool, with this implied spend, toward that peer, under this environment's rules? Settlement disputes resolve against on-chain `ToolPolicy` records and `SpendingLimit` structs on `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
+Coordination is **off-chain** and **PQ-first**. It answers: may this agent invoke this tool, with this implied spend, toward that peer, under this environment's rules? Settlement disputes resolve against on-chain `ToolPolicy` records and `SpendingLimit` structs on `Veya.sol` at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`.
 
 This document covers `src/coordination/router.ts`, `sessions.ts`, and `policyAgent.ts`, plus their coupling to `src/spending/limits.ts`. It does not implement MCP transport over the network; `routeMessage` is an in-process gate that an MCP runtime should call before dispatch.
 
