@@ -276,7 +276,7 @@ sequenceDiagram
 
 Do not give the sealed-node host the payer key. Exfiltrate ciphertext to the SDK host, then send the EVM transaction. Compromise of the sealed host already reveals plaintext at request time; adding the payer key would also let an attacker register environments and attest hashes.
 
-Explorer: `https://explorer.testnet.chain.robinhood.com`.
+Explorer: `https://robinhoodchain.blockscout.com`.
 
 ---
 
@@ -471,7 +471,7 @@ The all-zero-plus-one entropy is a canary only. Never reuse it for real events.
 
 Document the bind address, TLS terminator, identity path, and SDK origin in the same inventory used for the validator fleet. `VEYA_SEALED_NODE_URL` must remain an origin without a path suffix so `protectedExec` can append `/protected` safely.
 
-When filing an incident, include whether `result.sealed.ciphertext` was empty (legacy body), whether entropy length was 32, and whether any `storeSealedState` transaction appeared on `https://explorer.testnet.chain.robinhood.com`. Those three facts separate SDK bugs, node bugs, and skipped anchoring.
+When filing an incident, include whether `result.sealed.ciphertext` was empty (legacy body), whether entropy length was 32, and whether any `storeSealedState` transaction appeared on `https://robinhoodchain.blockscout.com`. Those three facts separate SDK bugs, node bugs, and skipped anchoring.
 
 Confirm that the sealed host cannot read `VEYA_DEPLOYER_PRIVATE_KEY`. A single stolen environment that holds both plaintext payloads and the EVM payer is a combined compromise of confidentiality and settlement authority.
 
