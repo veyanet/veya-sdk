@@ -527,7 +527,7 @@ Without a payer, construct a read-only `ethers.Contract` with `VEYA_ABI` and a `
 ### Explorer
 
 ```
-https://explorer.testnet.chain.robinhood.com/address/0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84
+https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674
 ```
 
 Contract pages show verified source when published; logs still decode from the SDK ABI even if the explorer has not verified source.
