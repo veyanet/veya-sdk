@@ -446,7 +446,7 @@ if (client.evm) {
 }
 ```
 
-This example treats wei as a string so JSON remains canonical. After the commitment check, the operator may store chunks on `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` and inspect the transaction on `https://explorer.testnet.chain.robinhood.com`.
+This example treats wei as a string so JSON remains canonical. After the commitment check, the operator may store chunks on `Veya.sol` at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` and inspect the transaction on `https://robinhoodchain.blockscout.com`.
 
 ---
 
