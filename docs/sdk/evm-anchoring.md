@@ -94,7 +94,7 @@ flowchart TB
     end
 
     subgraph Chain["Robinhood Robinhood Chain"]
-        VEYA["Veya.sol\n0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84"]
+        VEYA["Veya.sol\n0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674"]
         EXP["explorer.testnet.chain.robinhood.com"]
     end
 
@@ -136,7 +136,7 @@ const anchor = new EvmAnchor({
   rpcUrl: process.env.ROBINHOOD_MAINNET_RPC_URL,
   contractAddress: process.env.VEYA_CONTRACT_ADDRESS,
   chainId: ROBINHOOD_MAINNET.chainId,
-  explorerUrl: "https://explorer.testnet.chain.robinhood.com",
+  explorerUrl: "https://robinhoodchain.blockscout.com",
 });
 ```
 
@@ -206,7 +206,7 @@ private async send(txPromise: Promise<ethers.ContractTransactionResponse>): Prom
 }
 ```
 
-Callers receive a transaction hash string, not a receipt object. Use `explorerFor(hash)` to build `https://explorer.testnet.chain.robinhood.com/tx/0x...`.
+Callers receive a transaction hash string, not a receipt object. Use `explorerFor(hash)` to build `https://robinhoodchain.blockscout.com/tx/0x...`.
 
 ```mermaid
 sequenceDiagram
@@ -558,7 +558,7 @@ Retries after a successful mine must not reuse the same unique keys (UUID, commi
 
 The payer key is `msg.sender` for every write. Compromise of `VEYA_DEPLOYER_PRIVATE_KEY` allows registering environments, flagging nullifiers, and attesting hashes that auditors will treat as authoritative for that address. Rotate by abandoning the address; there is no on-chain key-rotation instruction.
 
-The RPC can lie about receipts. After a write, confirm the hash on `https://explorer.testnet.chain.robinhood.com/tx/<hash>` or via a second provider. `ensureRobinhoodChain` prevents accidental cross-chain writes; it does not prevent a malicious RPC on the correct chain id.
+The RPC can lie about receipts. After a write, confirm the hash on `https://robinhoodchain.blockscout.com/tx/<hash>` or via a second provider. `ensureRobinhoodChain` prevents accidental cross-chain writes; it does not prevent a malicious RPC on the correct chain id.
 
 ML-DSA bytes on chain are claims. Anyone can submit arbitrary bytes within the length cap. Trust comes from off-chain `verifyPQ` against a known public key whose BLAKE3 hash was registered in the environment record.
 
