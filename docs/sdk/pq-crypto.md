@@ -33,7 +33,7 @@ The `src/pq` module is the TypeScript surface for post-quantum identity, session
 
 ## Purpose and Scope
 
-This document specifies the algorithms, encodings, and call patterns that every other SDK module depends on. Coordination signs MCP envelopes with ML-DSA-44. Memory hashes payloads with BLAKE3. Consensus nodes (operator-run) sign execution digests with ML-DSA-44. Sealed-node commitments are BLAKE3 over ciphertext. EVM anchoring stores those 32-byte digests and, optionally, ML-DSA signature bytes on `Veya.sol` at `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84`.
+This document specifies the algorithms, encodings, and call patterns that every other SDK module depends on. Coordination signs MCP envelopes with ML-DSA-44. Memory hashes payloads with BLAKE3. Consensus nodes (operator-run) sign execution digests with ML-DSA-44. Sealed-node commitments are BLAKE3 over ciphertext. EVM anchoring stores those 32-byte digests and, optionally, ML-DSA signature bytes on `Veya.sol` at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`.
 
 The module is stateless with respect to Robinhood Chain. `generatePQIdentity` does not require `rpcUrl` or `payerPrivateKey`. Chain configuration is irrelevant until an operator decides to call `registerEnvironment` with `publicKeyHashBlake3(publicKey)`.
 
@@ -467,7 +467,7 @@ The following sequence is the PQ-to-chain path that `EvmAnchor.registerPqIdentit
 4. `registerEnvironment` writes `pqPubkeyHash` as `bytes32`.
 5. `storeCommitment` writes the same 32 bytes as a commitment keyed by the digest.
 
-After confirmation on `https://explorer.testnet.chain.robinhood.com`, an auditor recomputes step 2 and compares. If the auditor hashed `Buffer.from(publicKey).toString("hex")` as a UTF-8 string, the digest will not match. That class of error is the most common PQ-anchoring mistake.
+After confirmation on Robinhood Chain Mainnet (`Veya.sol` at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`, explorer `https://robinhoodchain.blockscout.com`; Testnet uses `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` on `https://explorer.testnet.chain.robinhood.com`), an auditor recomputes step 2 and compares. If the auditor hashed `Buffer.from(publicKey).toString("hex")` as a UTF-8 string, the digest will not match. That class of error is the most common PQ-anchoring mistake.
 
 `envType` on that path defaults to `1` (`SecureEnclave`). `0` is `Execution` and `2` is `Governance`. Those enum values are `Veya.sol` `EnvironmentType`, not the Research/Treasury labels used on other stacks.
 
