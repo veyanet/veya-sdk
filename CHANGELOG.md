@@ -10,7 +10,7 @@ This package settles on Robinhood Chain through `Veya.sol`, a protocol contract 
 
 ## [1.2.10] — 2026-10-25
 
-Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.11. No runtime API changes.
+Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10. No runtime API changes.
 
 ### Changed
 - Package version **1.2.10** across `package.json`, `SDK_VERSION`, the README badges, the CLI guide, the quickstart and the configuration reference.
