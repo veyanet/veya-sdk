@@ -481,7 +481,7 @@ This wrapper is application code. `src/compute/consensus.ts` stays strict so loc
 
 ---
 
-After a successful quorum, persist `ConsensusResult` JSON in the application audit log (without relying on node disk). That record plus later `anchorPqAttestation` receipts is enough for an auditor to replay verification using `@veyanet/sdk/pq` and the explorer at `https://explorer.testnet.chain.robinhood.com`.
+After a successful quorum, persist `ConsensusResult` JSON in the application audit log (without relying on node disk). That record plus later `anchorPqAttestation` receipts is enough for an auditor to replay verification using `@veyanet/sdk/pq` and the explorer at `https://robinhoodchain.blockscout.com`.
 
 ---
 
