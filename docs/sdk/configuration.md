@@ -341,13 +341,20 @@ The wallet is an `ethers.Wallet` bound to `ethers.JsonRpcProvider`. The provider
 
 | Variable | Maps to | Example | Notes |
 |----------|---------|---------|-------|
-| `ROBINHOOD_RPC_URL` | `rpcUrl` | `https://rpc.testnet.chain.robinhood.com` | Dedicated RPC recommended for production |
-| `ROBINHOOD_CHAIN_ID` | `chainId` | Testnet profile (Mainnet uses `ROBINHOOD_MAINNET_CHAIN_ID`) | Parsed with `Number(...)` |
-| `ROBINHOOD_EXPLORER_URL` | `explorerUrl` | `https://explorer.testnet.chain.robinhood.com` | No trailing slash |
-| `VEYA_CONTRACT_ADDRESS` | `contractAddress` | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Pin per deployment |
+| `ROBINHOOD_NETWORK` | `network` | `mainnet` (default) or `testnet` | Picks which variables below are read |
+| `ROBINHOOD_MAINNET_RPC_URL` | `rpcUrl` (Mainnet) | `https://rpc.mainnet.chain.robinhood.com` | Dedicated RPC recommended for production |
+| `ROBINHOOD_MAINNET_CHAIN_ID` | `chainId` (Mainnet) | Mainnet profile | Parsed with `Number(...)` |
+| `ROBINHOOD_MAINNET_EXPLORER_URL` | `explorerUrl` (Mainnet) | `https://robinhoodchain.blockscout.com` | No trailing slash |
+| `VEYA_MAINNET_CONTRACT_ADDRESS` | `contractAddress` (Mainnet) | `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674` | Unset uses the pinned Mainnet contract. An explicit empty string stays unpublished |
+| `VEYA_MAINNET_RELAYER_PRIVATE_KEY` | `payerPrivateKey` (Mainnet) | `0xabc...` 32-byte hex | Never commit. The only key env read on Mainnet |
+| `ROBINHOOD_RPC_URL` | `rpcUrl` (Testnet) | `https://rpc.testnet.chain.robinhood.com` | Read only when the profile is Testnet |
+| `ROBINHOOD_CHAIN_ID` | `chainId` (Testnet) | Testnet profile | Read only when the profile is Testnet |
+| `ROBINHOOD_EXPLORER_URL` | `explorerUrl` (Testnet) | `https://explorer.testnet.chain.robinhood.com` | Read only when the profile is Testnet |
+| `VEYA_PROTOCOL_CONTRACT_ADDRESS`, then `VEYA_CONTRACT_ADDRESS` | `contractAddress` (Testnet) | `0x1a1Dc3c55550FCE9F70ef6cDEeF967c0b72a5d84` | Read only when the profile is Testnet |
+| `VEYA_DEPLOYER_PRIVATE_KEY` | `payerPrivateKey` (Testnet) | `0xabc...` 32-byte hex | Never commit. Read only when the profile is Testnet |
 | `VEYA_VALIDATOR_NODES` | `validatorNodes` | `http://a:<port-1>,http://b:<port-2>,http://c:<port-3>` | Comma-separated |
 | `VEYA_SEALED_NODE_URL` | `sealedNodeUrl` | `<sealed-node-url>` | TLS URL in production |
-| `VEYA_DEPLOYER_PRIVATE_KEY` | `payerPrivateKey` | `0xabc...` 32-byte hex | Never commit |
+| `VEYA_SDK_TIMEOUT_MS` | `requestTimeoutMs` | `15000` | Minimum `1000` |
 
 ### Shell export examples
 
@@ -578,7 +585,7 @@ JSON-RPC batching is not used. Each `Veya.sol` write is a single transaction tha
 
 ## Compatibility and Versioning
 
-`@veyanet/sdk` version `1.2.10` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
+`@veyanet/sdk` version `1.2.11` targets Node.js 20+, ethers 6, `@noble/post-quantum` ML-DSA-44 and ML-KEM-768, and `hash-wasm` BLAKE3. The inlined ABI matches `Veya.sol` on Mainnet and on Testnet. The package version in this tree is not a new npm publish.
 
 Instruction names are a compatibility contract. Consumers should import `INSTRUCTION_NAMES` rather than hard-coding snake_case names from other stacks. Adding a Solidity function requires updating `src/abi/Veya.json`, `INSTRUCTION_NAMES`, and `EvmAnchor` together.
 
