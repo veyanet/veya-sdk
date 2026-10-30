@@ -33,7 +33,7 @@ Acknowledgment target: 72 hours. Coordinated disclosure with the reporter before
 
 | Artifact | Why |
 |----------|-----|
-| `.env` with `VEYA_DEPLOYER_PRIVATE_KEY` | Funded relayer / payer key |
+| `.env` with `VEYA_DEPLOYER_PRIVATE_KEY` | Funded host signer / payer key |
 | `~/.veya/agent-memory.json` | Local memory store |
 | Validator ML-DSA secret keys under the node home | Node identity |
 
