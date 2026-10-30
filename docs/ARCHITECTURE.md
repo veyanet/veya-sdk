@@ -7,7 +7,7 @@
 
   [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
   [![ethers v6](https://img.shields.io/badge/ethers-v6-purple?style=flat-edge)](https://docs.ethers.org/v6/)
-  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.10-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![@veyanet/sdk](https://img.shields.io/badge/%40veyanet%2Fsdk-1.2.11-green?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
 
   **[Documentation Hub](../README.md)** • **[Post-Quantum](./POST_QUANTUM.md)** • **[Quickstart](./QUICKSTART.md)** • **[Verification](./VERIFICATION.md)**
 
@@ -15,7 +15,7 @@
 
 ---
 
-This document describes the end-to-end architecture of `@veyanet/sdk` (this package, at `@veyanet/sdk`): **bounded multi-agent coordination** (scoped environments, MCP routing, sealed execution, validator consensus) anchored on **Robinhood Chain** with a **post-quantum security layer** (ML-DSA-44, Kyber-768, BLAKE3-256). The design prioritizes **environment isolation**, **decentralized consensus among operator-run nodes**, **optional hosted API**, and harvest-attack-resistant attestations.
+This document describes the end-to-end architecture of `@veyanet/sdk` (this package, at `@veyanet/sdk`): **bounded multi-agent coordination** (scoped environments, MCP routing, sealed execution, validator consensus) anchored on **Robinhood Chain** with a **post-quantum security layer** (ML-DSA-44, Kyber-768, BLAKE3-256). The design prioritizes **environment isolation**, **distributed consensus among operator-run nodes**, **optional hosted API**, and harvest-attack-resistant attestations.
 
 The hosted HTTP API at `https://api.veyanet.tech` **imports this SDK**. The SDK itself talks to Robinhood Chain JSON-RPC and to local validator / sealed-node processes. It does not require the API. Integrators who want crypto and settlement in-process use `@veyanet/sdk` directly.
 
@@ -61,7 +61,7 @@ The default profile is **Mainnet**, contract `0x87dC582eEA544A434a5C1e30Ca3d12c1
 
 1. **On-chain anchoring**: `Veya.sol` on Robinhood Chain stores environment identity fingerprints, BLAKE3 execution commitments, ML-DSA signature metadata, spending limits (wei), tool policies, memory nullifiers, and sealed ciphertext chunks across **10 Solidity functions** and **9 storage record types**.
 
-2. **Decentralized compute consensus**: Independent validator nodes at `<validator-1-url>`–`<port-3>` execute identical payloads, sign BLAKE3 hashes with ML-DSA-44, and return results. A **2-of-3 quorum** selects the agreed execution hash before optional on-chain attestation.
+2. **Distributed compute consensus**: Separate validator nodes at `<validator-1-url>`–`<port-3>` execute identical payloads, sign BLAKE3 hashes with ML-DSA-44, and return results. A **2-of-3 quorum** selects the agreed execution hash before optional on-chain attestation.
 
 3. **Protected sealed execution**: A sealed-node service at `<sealed-node-url>` receives AES-256-GCM encrypted payloads, executes inside a process boundary, and produces BLAKE3 ciphertext commitments suitable for `storeSealedState` on-chain data availability.
 
@@ -71,7 +71,7 @@ All post-quantum signature **verification** occurs off-chain. The EVM runtime do
 flowchart LR
     subgraph Capabilities["Three Coordinated Capabilities"]
         A["On-Chain Anchoring\nVeya.sol"]
-        B["Decentralized Consensus\nvalidator-node x3"]
+        B["Distributed Consensus\nvalidator-node x3"]
         C["Sealed Execution\nsealed-node :<sealed-port>"]
     end
     A --> D["Immutable BLAKE3 + ML-DSA audit trail"]
@@ -121,7 +121,7 @@ These hashes are live receipts. Open them on the Robinhood Chain testnet explore
 | Sealed-execution commitment | [0xd68ab196…31d8](https://explorer.testnet.chain.robinhood.com/tx/0xd68ab19671f0a3be63651cb6d6e24f5decf591da981708502827bca3689d31d8) |
 | PQ / environment registration path | [0x9a00af5e…8ad4](https://explorer.testnet.chain.robinhood.com/tx/0x9a00af5ef80fdefb3734df19ad30b82aa57fa212bd493b7ad5b224a343808ad4) |
 
-Architecture implication: hashes and environment bindings are **permanent audit evidence today**. The hosted API (`https://api.veyanet.tech`) uses a relayer that calls this SDK; operators can also sign with their own `payerPrivateKey` and never touch the API.
+Architecture implication: hashes and environment bindings are **permanent audit evidence today**. The hosted API (`https://api.veyanet.tech`) uses a host signer that calls this SDK; operators can also sign with their own `payerPrivateKey` and never touch the API.
 
 `EvmAnchor.ensureRobinhoodChain()` queries `eth_chainId` before every write. If the RPC returns anything other than the configured `chainId`, the SDK refuses to send. That is the guard against pointing this package at another EVM by accident.
 
@@ -141,7 +141,7 @@ Architecture implication: hashes and environment bindings are **permanent audit 
 | Replay attacker | Re-submit old memory entries | `flagMemoryNullifier` enforces spend-once | Unanchored local memory in `~/.veya/agent-memory.json` |
 | Harvest-now-decrypt-later | Record classical signatures today | PQ-first identity and BLAKE3 commitments | Pre-migration historical ECDSA receipts |
 | Mis-pointed RPC | Land writes on Ethereum mainnet or another L2 | `ensureRobinhoodChain` chain-id check | Operator who disables the check in a fork |
-| Hosted API compromise | Relayer key spends gas and writes rooms | SDK works without the API; guest JWT cannot drive the relayer | Relayer key remains a high-value secret when the API is used |
+| Hosted API compromise | Host signer key spends gas and writes rooms | SDK works without the API; guest JWT cannot drive the host signer | Host signer key remains a high-value secret when the API is used |
 
 ### Trust assumptions
 
@@ -166,7 +166,7 @@ Architecture implication: hashes and environment bindings are **permanent audit 
 
 ## Architectural Design Philosophy
 
-VEYA inverts the traditional agent-platform model. Security boundaries execute **locally** and **on-chain** rather than exclusively through a trusted remote API. The hosted API is a convenience relayer, not the cryptographic root.
+VEYA inverts the traditional agent-platform model. Security boundaries execute **locally** and **on-chain** rather than exclusively through a trusted remote API. The hosted API is a convenience signer, not the cryptographic root.
 
 ### 1. Post-quantum audit artifacts on Robinhood Chain
 
@@ -176,7 +176,7 @@ Every critical state transition maps to a **BLAKE3-256** digest stored as `bytes
 
 | Operation | Where it runs | What lands on-chain |
 |-----------|---------------|---------------------|
-| ML-DSA sign/verify | SDK `pq` module, auditor tooling | Signature bytes in `Attestation.mldsaSig` (optional; hosted relayer often stores the digest only) |
+| ML-DSA sign/verify | SDK `pq` module, auditor tooling | Signature bytes in `Attestation.mldsaSig` (optional; hosted signer often stores the digest only) |
 | Kyber encaps/decaps | SDK coordination transport | Never on-chain |
 | BLAKE3 commitment | Every layer | `bytes32` in mappings / events |
 | Quorum agreement | 3 validator nodes | Agreed hash → `attestExecution` or `storeCommitment` |
@@ -278,7 +278,7 @@ flowchart TB
         SealClient["protectedExec"]
     end
 
-    subgraph ComputeFleet["Decentralized Compute"]
+    subgraph ComputeFleet["Distributed Compute"]
         V1["validator-node :<port-1>"]
         V2["validator-node :<port-2>"]
         V3["validator-node :<port-3>"]
@@ -378,7 +378,7 @@ The contract is a single deployable unit. Design constraints:
 - **Chunk bounds**: `storeSealedState` rejects chunks larger than `MAX_SEALED_CHUNK` (8,192 bytes).
 - **Owner-scoped isolation**: Environment owner is `msg.sender` at `registerEnvironment`. Agent registration, spending-limit init, and tool policy require that owner.
 
-Authorization always requires the environment owner (or, for `recordSpend` / `attestExecution`, any caller once the environment exists: spend and attest are intentionally not owner-only so a relayer can record). Cross-environment agent/policy mismatch returns `Unauthorized`.
+Authorization always requires the environment owner (or, for `recordSpend` / `attestExecution`, any caller once the environment exists: spend and attest are intentionally not owner-only so a host signer can record). Cross-environment agent/policy mismatch returns `Unauthorized`.
 
 Custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, `MemoryAlreadyNullified`, `SignatureTooLarge`, …) are decoded by `fromAnchorRevert` in `src/errors/veya-error.ts` using 4-byte selectors.
 
@@ -446,7 +446,7 @@ JSON file at `~/.veya/agent-memory.json` holds scoped entries with a BLAKE3 cont
 
 ### `https://api.veyanet.tech` | Optional hosted surface
 
-The API depends on `"@veyanet/sdk": "^1.2.10"`. It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
+The API depends on `"@veyanet/sdk": "1.2.11"` (exact pin, from npm). It uses the SDK for Boundnet tools, protected executions, and PQ attestations. The dashboard talks HTTP to the API. Integrators who do not want a hosted process skip the API entirely.
 
 ---
 
@@ -532,7 +532,7 @@ sequenceDiagram
 6. Call `verifyPQ(sig, blake3HashBytes, publicKey)`
 7. Optionally cross-check against consensus `agreed_blake3_hash`
 
-The chain stores signature bytes up to 4,627 bytes but does not validate them in the EVM. The hosted relayer path often calls `storeCommitment` of the digest rather than stuffing raw ML-DSA bytes into every receipt; both paths are valid evidence if the auditor knows which one was used.
+The chain stores signature bytes up to 4,627 bytes but does not validate them in the EVM. The hosted signer path often calls `storeCommitment` of the digest rather than stuffing raw ML-DSA bytes into every receipt; both paths are valid evidence if the auditor knows which one was used.
 
 Procedures: [VERIFICATION.md](./VERIFICATION.md)
 
@@ -777,7 +777,7 @@ Both paths share one ABI, one chain id, and one commitment primitive.
 | Validator nodes | Node operator | ML-DSA attestation + quorum |
 | Sealed node | Node operator | Ciphertext commitment audit |
 | Local store | Machine user | Filesystem permissions on `~/.veya` |
-| Hosted API relayer | API operator | Guest cannot drive writes; SDK usable without API |
+| Hosted API host signer | API operator | Guest cannot drive writes; SDK usable without API |
 | RPC endpoint | RPC operator | `eth_chainId` must equal the configured chain id |
 
 ```mermaid
@@ -806,7 +806,7 @@ flowchart TB
     Observers --> Program
 ```
 
-No VEYA-hosted service is **required** inside the trust boundary. When the API is present, treat the relayer key as an operator secret, not as protocol root.
+No VEYA-hosted service is **required** inside the trust boundary. When the API is present, treat the host signer key as an operator secret, not as protocol root.
 
 ---
 
@@ -875,12 +875,12 @@ console.log(result.explorer.environment, result.explorer.memo);
 - HSM or enclave custody for ML-DSA secret keys
 - Monitor `revision` on environments for policy drift
 - Archive receipts (`to` must be Veya.sol) for compliance retention
-- Treat the hosted relayer key as production infrastructure, not as a shared demo wallet
+- Treat the hosted signer key as production infrastructure, not as a shared demo wallet
 - Fund the payer in **ETH wei** on the selected chain
 
 ### Hosted API pattern
 
-`https://api.veyanet.tech` sets `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL`, imports `@veyanet/sdk`, and relays `storeCommitment` when a room has a 16-byte environment id. Guest JWT cannot create environments or drive the relayer. Direct SDK users skip this pattern.
+`https://api.veyanet.tech` sets `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL`, imports `@veyanet/sdk`, and relays `storeCommitment` when a room has a 16-byte environment id. Guest JWT cannot create environments or drive the host signer. Direct SDK users skip this pattern.
 
 ---
 
@@ -916,7 +916,7 @@ console.log(result.explorer.environment, result.explorer.memo);
 | Local memory file locked | Write error | Close concurrent processes using `~/.veya` |
 | sealed-node crash | HTTP 502 / connection reset | Restart daemon; check logs |
 | Insufficient ETH | `INSUFFICIENT_FUNDS` | Fund the payer on the selected chain |
-| Relayer drained | API 503 on commit | Fund relayer; or sign with operator key via SDK |
+| Host signer drained | API 503 on commit | Fund the host signer; or sign with operator key via SDK |
 
 ### Cryptographic failures
 
@@ -970,7 +970,7 @@ Procedures: [VERIFICATION.md](./VERIFICATION.md)
 | Extension | Location | Status |
 |-----------|----------|--------|
 | Additional environment types | `EnvironmentType` enum | Requires contract migration |
-| Hosted relayer `attestExecution` with raw ML-DSA bytes | API + `EvmAnchor` | Contract and SDK ready; relayer often uses `storeCommitment` |
+| Hosted signer `attestExecution` with raw ML-DSA bytes | API + `EvmAnchor` | Contract and SDK ready; host signer often uses `storeCommitment` |
 | On-chain PQ verify | Future precompile research | Out of scope v1 |
 | Cross-environment policy | Composite keys | Not in v1 |
 Use the published Veya.sol address from NETWORK_PIN.md.
@@ -1005,7 +1005,7 @@ The following statements are true of a correctly configured `@veyanet/sdk` deplo
 | **Nullifier** | On-chain flag marking a memory entry as consumed |
 | **PQ** | Post-quantum: algorithms resistant to Shor/Grover attacks |
 | **Quorum** | Minimum agreeing validator count (default 2 of 3) |
-| **Relayer** | Optional `https://api.veyanet.tech` wallet that pays gas using this SDK |
+| **Host signer** | Optional `https://api.veyanet.tech` wallet that pays gas using this SDK |
 | **Sealed execution** | AES-encrypted payload processing with commitment output |
 | **Veya.sol** | Protocol contract at `0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`: not a token |
 | **Wei** | 1e-18 ETH; unit of `initSpendingLimit` / `recordSpend` |
