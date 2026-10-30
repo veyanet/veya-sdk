@@ -41,7 +41,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
 
 1. [Architectural Design Philosophy](#-architectural-design-philosophy)
 2. [High-Level SDK Data Flow](#-high-level-sdk-data-flow)
-3. [Installation & Requirements](#-installation--requirements)
+3. [Installation & Requirements](#-installation--environmental-requirements)
 4. [Client Configuration & Initialization](#-client-configuration--initialization)
 5. [Core Modules Overview](#-core-modules-overview)
     * [Post-Quantum Identity & Hashing](#1-post-quantum-identity--hashing)
