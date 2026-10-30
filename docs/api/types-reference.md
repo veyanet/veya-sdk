@@ -25,7 +25,7 @@ Package: `@veyanet/sdk`. Client: ethers v6. Facade: `VeyaClient`. Writes: `EvmAn
 13. [SpendingLimit](#spendinglimit)
 14. [PolicyAgent](#policyagent)
 15. [Coordination and Kyber](#coordination-and-kyber)
-16. [PQ module (`@veyanet/sdk/pq`)](#pq-module-veyasdkpq)
+16. [PQ module (`@veyanet/sdk/pq`)](#pq-module-veyanetsdkpq)
 17. [VeyaSdkError](#veyasdkerror)
 18. [Solidity struct mirrors](#solidity-struct-mirrors)
 19. [Explorer helpers](#explorer-helpers)
