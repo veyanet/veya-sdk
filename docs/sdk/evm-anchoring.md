@@ -93,7 +93,7 @@ flowchart TB
         H3["publicKeyHashBlake3()"]
     end
 
-    subgraph Chain["Robinhood Robinhood Chain"]
+    subgraph Chain["Robinhood Chain"]
         VEYA["Veya.sol\n0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674"]
         EXP["explorer.testnet.chain.robinhood.com"]
     end
