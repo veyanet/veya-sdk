@@ -83,12 +83,12 @@ npm run build
 
 This compiles `src/` with tsup into ESM + CJS under `dist/`, including types.
 
-### Consume from another package in the monorepo
+### Consume from another package
 
-`https://api.veyanet.tech` already depends on the SDK as a file path:
+`https://api.veyanet.tech` depends on the published SDK at an exact version:
 
 ```json
-"@veyanet/sdk": "^1.2.10"
+"@veyanet/sdk": "1.2.11"
 ```
 
 ```ts
@@ -451,7 +451,7 @@ const stateId = randomBytes(16);
 await evm.storeSealedState(envUuid, stateId, 0, chunkHash, chunk);
 ```
 
-Spending amounts are **wei**, not any other chain's native unit. `initSpendingLimit` requires the environment owner. `recordSpend` may be called by a relayer. Duplicate `storeCommitment` of the same 32-byte digest reverts `CommitmentAlreadyExists`.
+Spending amounts are **wei**, not any other chain's native unit. `initSpendingLimit` requires the environment owner. `recordSpend` may be called by a host signer. Duplicate `storeCommitment` of the same 32-byte digest reverts `CommitmentAlreadyExists`.
 
 Read back:
 
@@ -532,7 +532,7 @@ The SDK does not depend on a hosted API server.
 When you **do** run the API:
 
 1. Point `VEYA_VALIDATOR_NODES` and `VEYA_SEALED_NODE_URL` at the same local fleet
-2. Fund the relayer wallet on the selected chain
+2. Fund the host signer wallet on the selected chain
 3. Keep guest JWT off write routes (guest may verify proofs; guest may not drive `registerEnvironment`)
 4. Confirm receipts with `receipt.to === Veya.sol`, not merely `status === 1`
 
@@ -685,7 +685,7 @@ Use this when bringing a fresh machine online.
 | Sealed-node | `POST /protected` not connection-refused |
 | RPC | `eth_chainId` matches the selected profile |
 | Contract | `eth_getCode` at Veya.sol is non-empty |
-| Relayer (if API used) | ETH balance covers several `storeCommitment` writes |
+| Host signer (if API used) | ETH balance covers several `storeCommitment` writes |
 
 ### Incident: quorum lost
 
