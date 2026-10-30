@@ -386,7 +386,7 @@ Post-replace steps:
 2. Update `src/abi/index.ts` `VEYA_CONTRACT_ADDRESS`
 3. Set `VEYA_CONTRACT_ADDRESS` in operator and API environments
 4. Update [NETWORK_PIN.md](./NETWORK_PIN.md) and the vendored ABI constants
-5. Rebuild consumers (`https://api.veyanet.tech` file: dependency)
+5. Publish a new SDK version, then update and rebuild consumers (`https://api.veyanet.tech` pins `@veyanet/sdk` at an exact version from npm)
 
 **Never** mix an address from another EVM with Robinhood Chain writes. The chain-id guard is necessary but not sufficient if you also override `contractAddress` to a random ERC-20: the ABI would still encode VEYA function selectors against the wrong bytecode.
 
