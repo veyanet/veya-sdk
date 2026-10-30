@@ -1,8 +1,8 @@
 # Consensus Cluster Operations
 
-**Run a production-grade validator fleet for VEYA decentralized compute: 3 nodes, 2-of-3 BLAKE3 quorum, ML-DSA-44 attestations, optional settlement on Robinhood Chain.**
+**Run a production-grade validator fleet for VEYA distributed compute: 3 nodes, 2-of-3 BLAKE3 quorum, ML-DSA-44 attestations, optional settlement on Robinhood Chain.**
 
-Independent `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veyanet/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. The validators run on this machine. There is no public validator URL. When the application anchors an agreed hash, it writes to `Veya.sol` through `EvmAnchor` on the selected profile. The default is **Mainnet**. **Testnet** is `network: "testnet"`. The contract is not a token. A down cluster is fail-closed.
+Separate `validator-node` processes execute identical payloads, sign BLAKE3 digests with ML-DSA-44, and return results to `@veyanet/sdk` (`runConsensus`) or operator HTTP clients. No centralized execution API participates in the critical path. The validators run on this machine. There is no public validator URL. When the application anchors an agreed hash, it writes to `Veya.sol` through `EvmAnchor` on the selected profile. The default is **Mainnet**. **Testnet** is `network: "testnet"`. The contract is not a token. A down cluster is fail-closed.
 
 ---
 
@@ -57,7 +57,7 @@ Assumptions:
 | Term | Meaning |
 |------|---------|
 | validator-node | HTTP process that hashes, signs, and returns `NodeResult` |
-| Fleet | Typically three processes with independent ML-DSA identities |
+| Fleet | Typically three processes with separate ML-DSA identities |
 | Quorum | Two matching successful BLAKE3 hashes |
 | `task_id` | Caller-supplied correlation id |
 | Settlement | Optional `anchorPqAttestation` / `attestExecution` on `Veya.sol` |
@@ -104,7 +104,7 @@ flowchart TB
 | BLAKE3 | Execution digest |
 | `@veyanet/sdk` | Orchestration and optional EVM write |
 
-Nodes should not share disks for identity files. Correlated identities collapse the independence assumption of 2-of-3.
+Nodes should not share disks for identity files. Correlated identities collapse the separation that 2-of-3 relies on.
 
 ---
 
@@ -265,7 +265,7 @@ The SDK threshold is **2**. Operators cannot change it via environment variable 
 
 For production availability, put a reverse proxy that returns HTTP 200 `{ result: { status: "fail", ... } }` when a validator node is down, or wrap `runConsensus` with per-URL try/catch. Otherwise a single down node aborts the client call.
 
-Never run all three nodes as threads in one OS process and call that "decentralized." Independent hosts (or at least independent failure domains) are the point.
+Never run all three nodes as threads in one OS process. Separate hosts (or at least separate failure domains) are the point.
 
 ---
 
@@ -413,7 +413,7 @@ Spending remains wei. Consensus does not move ETH.
 | Anchoring chain mismatch | `ensureRobinhoodChain` throw | Fix `ROBINHOOD_RPC_URL` |
 | Duplicate execution hash | Solidity revert | New payload / new task bytes |
 
-A split-brain where two nodes collude on a hash is a 2-of-3 attack. Mitigate with independent operators or diverse implementations, not with a fourth node that still uses threshold 2 unless you also change the client.
+A split-brain where two nodes collude on a hash is a 2-of-3 attack. Mitigate with separate operators or diverse implementations, not with a fourth node that still uses threshold 2 unless you also change the client.
 
 ---
 
@@ -488,7 +488,7 @@ Ports their configured ports are conventional, not protocol-mandatory. If they c
 
 ---
 
-Independent failure domains matter more than extra nodes at threshold 2. Two nodes in one hypervisor plus a third on the same host is still one failure domain.
+Separate failure domains matter more than extra nodes at threshold 2. Two nodes in one hypervisor plus a third on the same host is still one failure domain.
 
 ---
 
