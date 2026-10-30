@@ -196,7 +196,7 @@ The contract never stores full public keys. Registration functions accept:
 | `mldsaSig` | ≤ 4,627 bytes | `attestExecution` |
 | `identityHash` + `executionHash` | 32 + 32 | `anchorPqAttestation` |
 
-Verifiers recompute `BLAKE3(public_key_bytes)` locally and compare to the on-chain fingerprint. `anchorPqAttestation` links those two hashes without repeating the signature blob: useful when the relayer stored only a commitment.
+Verifiers recompute `BLAKE3(public_key_bytes)` locally and compare to the on-chain fingerprint. `anchorPqAttestation` links those two hashes without repeating the signature blob: useful when the host signer stored only a commitment.
 
 ---
 
@@ -523,7 +523,7 @@ If three validators disagree, first suspect key order and `undefined` fields in 
 | Grover attack | 128-bit hashes | BLAKE3-256 on SDK paths |
 | HNDL recording | Classical agent certs | PQ-first anchoring today |
 | Key compromise | ML-DSA secret | Rotation + nullifier flags |
-| Validator collusion | Consensus | Require 2-of-3 independent operators |
+| Validator collusion | Consensus | Require 2-of-3 separate operators |
 | Hash substitution on sealed chunks | Caller-declared hash | Auditor recomputes BLAKE3(chunk) |
 | Wrong chain | All anchors | `ensureRobinhoodChain` |
 
