@@ -8,6 +8,24 @@ This package settles on Robinhood Chain through `Veya.sol`, a protocol contract 
 
 ---
 
+## [1.2.11] — 2026-10-30
+
+Version, wording and documentation release, published alongside `@veyanet/mcp` 1.2.11. No API, ABI or behaviour changes since 1.2.10. One returned text changed (see Changed).
+
+### Changed
+- Package version **1.2.11** in `package.json`, `SDK_VERSION`, the surface test, the README badge, `docs/README.md`, `docs/ARCHITECTURE.md`, `docs/CLI.md`, `docs/QUICKSTART.md` and `docs/sdk/configuration.md`.
+- Integration snippets now reference `"@veyanet/sdk": "1.2.11"` (exact pin).
+- `package.json` has a `prepack` script (`npm run build`), so `npm pack` and `npm publish` from a clean checkout always include the compiled `dist/`.
+- Public wording. The docs, README and CHANGELOG call the hosted API's chain wallet the **host signer**, and describe the validator fleet as "distributed" with "separate" nodes in place of "decentralized" and "independent". Class names (such as `DecentralizedComputeResource`), file paths (such as `docs/sdk/decentralized-compute.md`) and environment variables (`*_RELAYER_*`) are unchanged. README anchor `#2-decentralized-2-of-3-consensus` is now `#2-distributed-2-of-3-consensus`.
+- The Mainnet settlement readiness `reason` text now reads `mainnet host signer is unfunded` / `mainnet host signer holds ETH` (was `mainnet relayer …`). The `ready` flag is unchanged.
+
+### Fixed
+- README "Comprehensive Quickstart Script" imports `dotenv/config`, but `dotenv` is not a dependency of this package, so the script failed with `ERR_MODULE_NOT_FOUND` in a project that had only `@veyanet/sdk`. The section now says to run `npm install @veyanet/sdk dotenv` first.
+- `docs/sdk/configuration.md` environment table listed only the Testnet variables (`ROBINHOOD_RPC_URL`, `ROBINHOOD_CHAIN_ID`, `ROBINHOOD_EXPLORER_URL`, `VEYA_CONTRACT_ADDRESS`, `VEYA_DEPLOYER_PRIVATE_KEY`), which the default Mainnet profile does not read. It now lists the Mainnet variables (`ROBINHOOD_MAINNET_RPC_URL`, `ROBINHOOD_MAINNET_CHAIN_ID`, `ROBINHOOD_MAINNET_EXPLORER_URL`, `VEYA_MAINNET_CONTRACT_ADDRESS`, `VEYA_MAINNET_RELAYER_PRIVATE_KEY`), marks the Testnet ones as Testnet only, and adds `ROBINHOOD_NETWORK`, `VEYA_PROTOCOL_CONTRACT_ADDRESS` and `VEYA_SDK_TIMEOUT_MS` (default `15000`).
+- `docs/QUICKSTART.md`, `docs/ARCHITECTURE.md` and `docs/CLI.md` disagreed on how the API gets the SDK (a local file path in one, a `^` range in the others). The API now installs the published SDK at exactly `1.2.11`, and all three pages say so. `docs/DEPLOYMENT.md` no longer calls it a file dependency.
+
+---
+
 ## [1.2.10] — 2026-10-25
 
 Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10. No runtime API changes.
@@ -21,14 +39,14 @@ Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10
 - Documentation pages that still presented the Testnet contract (`0x1a1Dc3c5…5d84`) as the default now show the Mainnet `Veya.sol` (`0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674`) and the Mainnet explorer. Testnet values remain wherever a page explicitly describes Testnet.
 - `docs/sdk/pq-crypto.md` now names both networks in the worked ML-DSA registration path instead of implying Testnet only.
 - The `ROBINHOOD_TESTNET` profile listing in `docs/sdk/configuration.md` shows the Testnet object; it was previously mislabelled as `ROBINHOOD_MAINNET`.
-- Contract references corrected in `ARCHITECTURE.md`, `CLI.md`, `DEPLOYMENT.md`, `VERIFICATION.md`, the operations guides (`consensus-cluster.md`, `sealed-node.md`), `storage-layouts.md`, and the SDK guides for coordination, decentralized compute, EVM anchoring and sealed execution.
+- Contract references corrected in `ARCHITECTURE.md`, `CLI.md`, `DEPLOYMENT.md`, `VERIFICATION.md`, the operations guides (`consensus-cluster.md`, `sealed-node.md`), `storage-layouts.md`, and the SDK guides for coordination, distributed compute, EVM anchoring and sealed execution.
 
 ---
 
 ## [1.2.9] — 2026-10-25
 
 ### Changed
-- Package version **1.2.9**, released together with `@veyanet/mcp` 1.2.9 (Paid Call Guard). No API change.
+- Package version **1.2.9**, released together with `@veyanet/mcp` 1.2.9 (Metered Call Guard). No API change.
 
 ## [1.2.8] — 2026-10-17
 
@@ -70,7 +88,7 @@ Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10
 ### Added
 - Phase 3 gates that do not deploy: Robinhood Chain is the chosen network and `settlementLive` stays false. A receipt keeps the chain id that produced it (`RECEIPT_CHAIN` if a caller tries to relabel it). Guest Use on mainnet stays no, and `VEYA_MAINNET_GUEST_KILL` defaults to halted. A real-ETH amount above 0.01 ETH returns `FEE_CAP`. `mainnetDeployPlan` does not broadcast.
 - The mainnet guard profile named in 1.2.7 is in this tree. `network: "mainnet"` or `ROBINHOOD_NETWORK=mainnet` selects, the mainnet RPC, and the mainnet explorer. The payer slot on that profile is `VEYA_MAINNET_RELAYER_PRIVATE_KEY` only. A projected fee above `0.01 ETH` at a gas ceiling of `300,000` returns `FEE_CAP` and sends nothing. Guest settlement on that profile returns `GUEST_TESTNET_ONLY`. Default resolution stays testnet. An explicit empty contract returns `MAINNET_UNPUBLISHED` and sends nothing. The deployed address is recorded in Unreleased above.
-- `sealDecision`: an evidence id and a decision object go in. The sealed runtime runs first. If it does not answer, the result is `SEALED_UNREACHABLE` and nothing is sent. If it answers, a 2-of-3 ML-DSA quorum follows. `attestExecution` is sent when a payer key is passed, or when the seal-decision relayer switch is on and a relayer key is passed into the call. With the switch off and no payer key, the sealed result and the quorum are returned and nothing is sent.
+- `sealDecision`: an evidence id and a decision object go in. The sealed runtime runs first. If it does not answer, the result is `SEALED_UNREACHABLE` and nothing is sent. If it answers, a 2-of-3 ML-DSA quorum follows. `attestExecution` is sent when a payer key is passed, or when the seal-decision host-signer switch is on and a host signer key is passed into the call. With the switch off and no payer key, the sealed result and the quorum are returned and nothing is sent.
 - `examples/seal-decision.ts` prints that JSON and exits non-zero on a refusal.
 - The field list and a real run are in [docs/sdk/seal-decision.md](./docs/sdk/seal-decision.md).
 
@@ -178,7 +196,7 @@ Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10
 ### Added
 - Phase 2 operator surface aligned with hosted API `https://api.veyanet.tech` (Testnet).
 - Docs honesty: sealed execution is **AES-256-GCM + BLAKE3 + ML-DSA**; public examples default to `api.veyanet.tech`; loopback is local debug only.
-- Explicit Phase 2 ship pack references: spend / nullifier / `attestExecution` on the hosted relayer path (backend), CORS allowlist, canary, fleet systemd.
+- Explicit Phase 2 ship pack references: spend / nullifier / `attestExecution` on the hosted signer path (backend), CORS allowlist, canary, fleet systemd.
 
 ### Changed
 - Marketing and content docs no longer present AWS Nitro / Intel SGX / live FHE as the product path.
@@ -210,9 +228,9 @@ Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10
 ## [0.1.2] — 2026-06-23
 
 ### Added
-- **Decentralized Compute Resource**: Added `veya.compute` (`DecentralizedComputeResource`) to orchestrate multi-node consensus-based tasks.
+- **Distributed Compute Resource**: Added `veya.compute` (`DecentralizedComputeResource`) to orchestrate multi-node consensus-based tasks.
 - **Consensus Verification**: Integrated multi-node signature checking and state hash quorum matching.
-- **On-Chain State Anchoring**: Support for anchoring decentralized compute consensus outcomes on Robinhood Chain via `Veya.sol` commitments.
+- **On-Chain State Anchoring**: Support for anchoring distributed compute consensus outcomes on Robinhood Chain via `Veya.sol` commitments.
 - **Documentation**: Added the `decentralized-compute.md` manual and updated the master index and root README files.
 
 ---
@@ -263,7 +281,7 @@ Documentation and consistency release, published alongside `@veyanet/mcp` 1.2.10
 ## [0.0.3-alpha] — 2026-04-28
 
 ### Added
-- **Robinhood Relayer Integration**: Connected the SDK to the VEYA relayer for subsidized settlement writes on Robinhood Chain testnet.
+- **Robinhood Host Signer Integration**: Connected the SDK to the VEYA host signer for subsidized settlement writes on Robinhood Chain testnet.
 - `proofs.verifyTransaction()`: Public verify path so clients can cross-reference transaction hashes with the VEYA proof registry.
 - **On-Chain Identity**: Environment and agent registration helpers against `Veya.sol`.
 
