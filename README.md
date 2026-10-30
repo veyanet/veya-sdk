@@ -6,7 +6,7 @@
   **The official client for post-quantum agent identity, 2-of-3 consensus, sealed execution, and protocol settlement on Robinhood Chain.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.10-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.11-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
 
@@ -18,7 +18,7 @@
 
 ## 💡 Information: What is VEYA?
 
-The **VEYA Protocol** is a decentralized, cryptographically shielded execution layer engineered for post-quantum resilient autonomous agent fleets on **Robinhood Chain**. Traditional LLM agent frameworks suffer from severe structural vulnerabilities: because agents require private execution contexts—such as API integration credentials, proprietary system prompts, treasury authority, and policy rules—running them in standard host runtimes exposes sensitive state in plaintext to host operators, database administrators, and network intermediaries.
+The **VEYA Protocol** is a cryptographically shielded execution layer engineered for post-quantum resilient autonomous agent fleets on **Robinhood Chain**. Traditional LLM agent frameworks suffer from severe structural vulnerabilities: because agents require private execution contexts—such as API integration credentials, proprietary system prompts, treasury authority, and policy rules—running them in standard host runtimes exposes sensitive state in plaintext to host operators, database administrators, and network intermediaries.
 
 VEYA solves this security gap by establishing client-side cryptographic boundaries and post-quantum attestation primitives. Sensitive agent workloads are protected through local post-quantum key generation (**ML-DSA-44**), quantum-resistant session negotiation (**Kyber-768**), high-throughput cryptographic digests (**BLAKE3-256**), sealed execution with **AES-256-GCM** (software sealed-node), and **2-of-3 multi-node consensus**.
 
@@ -29,11 +29,11 @@ The `@veyanet/sdk` is the canonical, type-safe developer interface designed to i
 By integrating `@veyanet/sdk` into your agentic runtime, you enable the following core capabilities:
 *   **Post-Quantum Identity & Transport**: Generate FIPS 204 ML-DSA-44 keypairs locally and establish FIPS 203 Kyber-768 session keys for quantum-resistant data exchange.
 *   **High-Speed BLAKE3-256 Digesting**: Compute deterministic 32-byte cryptographic commitments for execution payloads, agent memories, and pubkey fingerprints.
-*   **Decentralized 2-of-3 Consensus**: Orchestrate tasks across independent, cryptographically attested validator nodes to verify execution outputs before committing state transitions.
+*   **Distributed 2-of-3 Consensus**: Orchestrate tasks across separate, cryptographically attested validator nodes to verify execution outputs before committing state transitions.
 *   **Sealed Execution (AES-256-GCM)**: Execute confidential tasks within a software sealed-node using AES-256-GCM authenticated encryption and BLAKE3 ciphertext commitments with fail-closed isolation.
 *   **On-Chain Attestation & Policy Settlement**: Submit tamper-evident execution commitments, spending limits (in wei), and tool permissions to the protocol contract via `EvmAnchor`.
 *   **One proof entry**: `proveInput` takes text, canonical JSON, or a receipt hash. A receipt with a `Veya.sol` log returns the explorer link. A hash with no VEYA log is a refusal. Without anchor, the result is the digest and `anchored` is false, and no transaction is sent. Anchor writes one `storeCommitment` only when a funded payer key and an existing environment id are both present, then reads that transaction back. Anchor without a payer key is a refusal and sends nothing. See [docs/sdk/proof.md](./docs/sdk/proof.md).
-*   **One sealed decision**: `sealDecision` takes an evidence id and a decision object. The sealed runtime runs first. If it does not answer, the result is `SEALED_UNREACHABLE` and nothing is sent. If it answers, a 2-of-3 ML-DSA quorum follows. `attestExecution` is sent when `payerPrivateKey` is passed, or when the seal-decision relayer switch is on. See [docs/sdk/seal-decision.md](./docs/sdk/seal-decision.md).
+*   **One sealed decision**: `sealDecision` takes an evidence id and a decision object. The sealed runtime runs first. If it does not answer, the result is `SEALED_UNREACHABLE` and nothing is sent. If it answers, a 2-of-3 ML-DSA quorum follows. `attestExecution` is sent when `payerPrivateKey` is passed, or when the seal-decision host-signer switch is on. See [docs/sdk/seal-decision.md](./docs/sdk/seal-decision.md).
 
 ---
 
@@ -45,7 +45,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
 4. [Client Configuration & Initialization](#-client-configuration--initialization)
 5. [Core Modules Overview](#-core-modules-overview)
     * [Post-Quantum Identity & Hashing](#1-post-quantum-identity--hashing)
-    * [Decentralized 2-of-3 Consensus](#2-decentralized-2-of-3-consensus)
+    * [Distributed 2-of-3 Consensus](#2-distributed-2-of-3-consensus)
     * [Sealed Execution (AES-256-GCM)](#3-sealed-execution-aes-256-gcm)
     * [On-Chain Attestation & EVM Anchoring](#4-on-chain-attestation--evm-anchoring)
 6. [Comprehensive Quickstart Script](#-comprehensive-quickstart-script)
@@ -72,7 +72,7 @@ Every agent and validator within the VEYA ecosystem maintains an **ML-DSA-44** (
 Rather than relying on remote database logs to guarantee state integrity, the SDK establishes a strict client-side verification loop. When storing memory states or context tables, the SDK computes a local **BLAKE3-256** cryptographic checksum. The VEYA API acts as a content-addressed storage ledger, storing only 64-character hexadecimal digests. Upon state retrieval, the SDK re-computes the digest of the returned payload locally and asserts its strict equality against the anchored hash, halting execution instantly if mid-flight manipulation occurs.
 
 ### 3. Multi-Node Quorum & Fail-Closed Isolation
-For high-integrity execution, VEYA routes workloads to a distributed 3-node validator fleet requiring a **2-of-3 quorum**. Each node independently executes the task, cryptographically signs the output hash using its ML-DSA identity, and returns the attestation to the SDK. If the sealed node or validator fleet is unavailable, the SDK fails closed, preventing unverified or unencrypted state execution.
+For high-integrity execution, VEYA routes workloads to a distributed 3-node validator fleet requiring a **2-of-3 quorum**. Each node executes the task on its own, cryptographically signs the output hash using its ML-DSA identity, and returns the attestation to the SDK. If the sealed node or validator fleet is unavailable, the SDK fails closed, preventing unverified or unencrypted state execution.
 
 ---
 
@@ -97,7 +97,7 @@ flowchart TB
         StateDB[("Content-Addressed Digest Registry")]
     end
 
-    subgraph ComputeBoundary["Decentralized Fleet & Enclave Runtimes"]
+    subgraph ComputeBoundary["Distributed Fleet & Enclave Runtimes"]
         ValidatorFleet["Validator Node Fleet\n2-of-3 Quorum Threshold"]
         SealedNode["Sealed Node\nAES-256-GCM Engine"]
         ConsensusEngine["Consensus Engine\nML-DSA Signature Check"]
@@ -227,7 +227,7 @@ const isValid = await pq.verifyPQ(signature, digest, publicKey);
 console.log("ML-DSA-44 Signature Valid:", isValid);
 ```
 
-### 2. Decentralized 2-of-3 Consensus
+### 2. Distributed 2-of-3 Consensus
 Distribute execution tasks across validator nodes and verify that a 2-of-3 quorum reaches cryptographic hash agreement.
 
 ```typescript
@@ -290,6 +290,12 @@ console.log("Commitment Tx:", explorer.memo);
 ## 🚀 Comprehensive Quickstart Script
 
 Below is a complete, runnable TypeScript script demonstrating end-to-end post-quantum key generation, BLAKE3 digesting, consensus, and on-chain anchoring.
+
+The first line loads `.env` with `dotenv`, which this package does not install. Install both first:
+
+```bash
+npm install @veyanet/sdk dotenv
+```
 
 ```typescript
 import "dotenv/config";
