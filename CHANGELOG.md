@@ -16,8 +16,8 @@ Version, wording and documentation release, published alongside `@veyanet/mcp` 1
 - Package version **1.2.11** in `package.json`, `SDK_VERSION`, the surface test, the README badge, `docs/README.md`, `docs/ARCHITECTURE.md`, `docs/CLI.md`, `docs/QUICKSTART.md` and `docs/sdk/configuration.md`.
 - Integration snippets now reference `"@veyanet/sdk": "1.2.11"` (exact pin).
 - `package.json` has a `prepack` script (`npm run build`), so `npm pack` and `npm publish` from a clean checkout always include the compiled `dist/`.
-- Public wording. The docs, README and CHANGELOG call the hosted API's chain wallet the **host signer**, and describe the validator fleet as "distributed" with "separate" nodes in place of "decentralized" and "independent". Class names (such as `DecentralizedComputeResource`), file paths (such as `docs/sdk/decentralized-compute.md`) and environment variables (`*_RELAYER_*`) are unchanged. README anchor `#2-decentralized-2-of-3-consensus` is now `#2-distributed-2-of-3-consensus`.
-- The Mainnet settlement readiness `reason` text now reads `mainnet host signer is unfunded` / `mainnet host signer holds ETH` (was `mainnet relayer …`). The `ready` flag is unchanged.
+- Public wording. The docs, README and CHANGELOG call the hosted API's chain wallet the **host signer**, and describe the validator fleet as "distributed" with "separate" nodes. Class names (such as `DecentralizedComputeResource`), file paths (such as `docs/sdk/decentralized-compute.md`) and environment variables (`*_RELAYER_*`) are unchanged. The README consensus section anchor is now `#2-distributed-2-of-3-consensus`.
+- The Mainnet settlement readiness `reason` text now reads `mainnet host signer is unfunded` / `mainnet host signer holds ETH`, using the host signer name. The `ready` flag is unchanged.
 
 ### Fixed
 - README "Comprehensive Quickstart Script" imports `dotenv/config`, but `dotenv` is not a dependency of this package, so the script failed with `ERR_MODULE_NOT_FOUND` in a project that had only `@veyanet/sdk`. The section now says to run `npm install @veyanet/sdk dotenv` first.
