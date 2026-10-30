@@ -1,8 +1,8 @@
-# SDK Decentralized Compute
+# SDK Distributed Compute
 
 **Multi-node BLAKE3 quorum with ML-DSA-44 attestations: `runConsensus()` in `@veyanet/sdk`.**
 
-The SDK orchestrates decentralized execution consensus via `src/compute/consensus.ts`. Three independent validator nodes execute identical payloads; **2-of-3** matching BLAKE3 digests constitute agreement. Agreed hashes can later be written to `Veya.sol` through `EvmAnchor.anchorPqAttestation` or `attestExecution`. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`. A down validator cluster is fail-closed.
+The SDK orchestrates distributed execution consensus via `src/compute/consensus.ts`. Three separate validator nodes execute identical payloads; **2-of-3** matching BLAKE3 digests constitute agreement. Agreed hashes can later be written to `Veya.sol` through `EvmAnchor.anchorPqAttestation` or `attestExecution`. The default profile is **Mainnet**. **Testnet** is `network: "testnet"`. A down validator cluster is fail-closed.
 
 ---
 
@@ -33,7 +33,7 @@ The SDK orchestrates decentralized execution consensus via `src/compute/consensu
 
 ## Purpose and Scope
 
-Decentralized compute replaces a centralized execution API. Operators run their own validator fleet; the SDK collects results and evaluates quorum locally. This document specifies the TypeScript client. Process lifecycle, ports, and systemd units live in [operations/consensus-cluster.md](../operations/consensus-cluster.md).
+Distributed compute replaces a centralized execution API. Operators run their own validator fleet; the SDK collects results and evaluates quorum locally. This document specifies the TypeScript client. Process lifecycle, ports, and systemd units live in [operations/consensus-cluster.md](../operations/consensus-cluster.md).
 
 The client does not talk to Robinhood Chain. Gas, `eth_chainId`, and `Veya.sol` appear only if the application anchors the agreed hash afterwards. Consensus can be used in CI against loopback nodes with no payer key.
 
@@ -471,7 +471,7 @@ This wrapper is application code. `src/compute/consensus.ts` stays strict so loc
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | fetch failed <port-1> | Node not listening | Start alpha on <port-1> |
-| False quorum | Two nodes, same bug | Independent implementations / hosts |
+| False quorum | Two nodes, same bug | Separate implementations / hosts |
 | True disagreement | Nondeterministic payload | Canonical JSON, wei strings |
 | `results.length` 1 | Two nodes skipped | Check `result` wrapping |
 | Explorer has no hash | Never anchored | Optional write to `Veya.sol` |
