@@ -91,9 +91,9 @@ export function mainnetFundingStatus(input: {
     return { separateFromTestnet: true, ready: false, reason: "balance was not read" };
   }
   if (input.balanceWei <= 0n) {
-    return { separateFromTestnet: true, ready: false, reason: "mainnet relayer is unfunded" };
+    return { separateFromTestnet: true, ready: false, reason: "mainnet host signer is unfunded" };
   }
-  return { separateFromTestnet: true, ready: true, reason: "mainnet relayer holds ETH" };
+  return { separateFromTestnet: true, ready: true, reason: "mainnet host signer holds ETH" };
 }
 
 /** Default halted. The written guest decision is also no, so clearing the kill switch does not open Use. */
