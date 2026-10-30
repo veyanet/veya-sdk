@@ -1,6 +1,6 @@
 {
   "name": "@veyanet/sdk",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "VEYA TypeScript SDK for Robinhood Chain — PQ identity, AES-256-GCM sealed exec, 2-of-3 consensus, Veya.sol anchoring. Default profile is Mainnet.",
   "license": "MIT",
   "type": "module",
@@ -33,6 +33,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
     "test": "vitest run",
     "lint": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
