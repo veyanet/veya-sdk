@@ -70,7 +70,7 @@ On-chain storage provides **immutable evidence**. Off-chain verification provide
 
 - Permanent audit records resistant to harvest-now-decrypt-later adversaries
 - Native-speed ML-DSA verification in TypeScript (`@noble/post-quantum` via `@veyanet/sdk`)
-- Independent re-verification decades after anchoring: even if secp256k1 is broken for agent-identity purposes
+- Re-verification by any party decades after anchoring: even if secp256k1 is broken for agent-identity purposes
 
 A verifier with Robinhood Chain RPC access, the agent’s ML-DSA public key, and either an `Attestation` mapping row or a `CommitmentStored` event can validate an attestation **without trusting VEYA hosted infrastructure**.
 
@@ -196,7 +196,7 @@ Use this checklist for each attestation under review.
 - [ ] Load detached `mldsaSig` bytes from the attestation mapping when present
 - [ ] Run `verifyPQ` from `@veyanet/sdk/pq`
 - [ ] Confirm algorithm is ML-DSA-44 only
-- [ ] If the hosted relayer used `storeCommitment` without sig bytes, skip this phase and rely on identity + digest + quorum
+- [ ] If the hosted signer used `storeCommitment` without sig bytes, skip this phase and rely on identity + digest + quorum
 
 ### Phase 4 | Consensus alignment (if applicable)
 
@@ -291,7 +291,7 @@ Public keys are 1,312 bytes for ML-DSA-44. Hashing a hex string of the key (UTF-
 
 ## Commitment Verification
 
-`storeCommitment(environmentUuid, commitment)` is the common hosted-relayer path. Uniqueness is by the 32-byte value itself (`commitments[commitment]`).
+`storeCommitment(environmentUuid, commitment)` is the common hosted-signer path. Uniqueness is by the 32-byte value itself (`commitments[commitment]`).
 
 Steps:
 
@@ -301,7 +301,7 @@ Steps:
 4. Recompute BLAKE3 over the claimed off-chain payload; compare to `commitment`.
 5. Reject if the API row’s digest and the event’s digest differ.
 
-Guest proofs in the hosted product may use SHA-256 for **browser-previewable** content hashing, then the relayer still writes a `bytes32` into `Veya.sol`. If you are auditing a Use-mode content proof, ask which hash function produced the 32 bytes. SDK-native agent attestations are BLAKE3. Mixing them without labeling is an audit finding.
+Guest proofs in the hosted product may use SHA-256 for **browser-previewable** content hashing, then the host signer still writes a `bytes32` into `Veya.sol`. If you are auditing a Use-mode content proof, ask which hash function produced the 32 bytes. SDK-native agent attestations are BLAKE3. Mixing them without labeling is an audit finding.
 
 ---
 
@@ -381,9 +381,9 @@ Verify each `NodeResult.mldsa_signature` with `verifyPQ` over the same digest th
 | `identityHash` | `BLAKE3(agent_ml_dsa_pubkey)` |
 | `executionHash` | `Attestation.blake3Hash` or the consensus agreed hash |
 | `environmentUuid` | Same environment on both records |
-| `authority` | Expected signer / relayer |
+| `authority` | Expected signer / host signer |
 
-This record exists so a relayer can store a compact binding without repeating 2,420 signature bytes in every receipt. It is not a substitute for `verifyPQ` when signature bytes exist elsewhere (validator logs, `attestExecution`).
+This record exists so a host signer can store a compact binding without repeating 2,420 signature bytes in every receipt. It is not a substitute for `verifyPQ` when signature bytes exist elsewhere (validator logs, `attestExecution`).
 
 Duplicate `executionHash` reverts `PqAttestationAlreadyExists`. A second “updated” attestation for the same digest will not land; that is a feature.
 
@@ -593,7 +593,7 @@ Chain records alone are **insufficient** without off-chain pubkeys. A perfect `b
 | Sealed hash mismatch | Declared hash != chunk | Recompute; reject |
 | Wrong chain | RPC chain id differs | Switch endpoint |
 | Duplicate commitment revert | Same digest already stored | That is success from an earlier write: fetch it |
-| Empty `mldsaSig` | Relayer used `storeCommitment` | Verify as commitment + optional PqAttestation |
+| Empty `mldsaSig` | Host signer used `storeCommitment` | Verify as commitment + optional PqAttestation |
 
 ```mermaid
 flowchart TD
@@ -634,7 +634,7 @@ Do not pick the hash that matches the API. Dump all three `blake3_execution_hash
 
 Archive the old public key against the old `pqHash`. New `registerAgent` (new UUID) is cleaner than overwriting folklore. The v1 contract does not provide an in-place pubkey update; `exists` stays true.
 
-### When the relayer is the authority field
+### When the host signer is the authority field
 
 That means the hosted wallet sent the transaction. Agent identity is still the ML-DSA fingerprint. Write both into the audit log: `receipt.from` (payer) and `pqHash` (agent).
 
@@ -663,7 +663,7 @@ That means the hosted wallet sent the transaction. Agent identity is still the M
 | **Fingerprint** | BLAKE3 of an ML-DSA public key |
 | **Digest** | 32-byte BLAKE3 of a payload |
 | **Quorum hash** | Agreed `blake3_execution_hash` from 2-of-3 nodes |
-| **Relayer** | Optional API wallet that sets `msg.sender` |
+| **Host signer** | Optional API wallet that sets `msg.sender` |
 | **Veya.sol** | Protocol contract: not a token |
 
 ---
