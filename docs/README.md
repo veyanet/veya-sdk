@@ -6,7 +6,7 @@
   **Bounded autonomous systems on Robinhood Chain: post-quantum identity, sealed execution, and Veya.sol settlement.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../README.md)
-  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.10-cb3837?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![npm](https://img.shields.io/badge/@veyanet/sdk-1.2.11-cb3837?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node](https://img.shields.io/badge/Node.js-%3E%3D20-green?style=flat-edge)](../package.json)
   [![ethers](https://img.shields.io/badge/ethers-v6-3c3c3d?style=flat-edge)](../package.json)
   [![Mainnet](https://img.shields.io/badge/Default-Mainnet-blue?style=flat-edge)](https://robinhoodchain.blockscout.com/address/0x87dC582eEA544A434a5C1e30Ca3d12c1e548a674)
@@ -387,7 +387,7 @@ Solidity custom errors (`EnvironmentDoesNotExist`, `SpendingLimitExceeded`, …)
 
 ### Versioning
 
-Package version is **1.2.10** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
+Package version is **1.2.11** (`package.json`). Breaking changes to `VeyaClientConfig`, `INSTRUCTION_NAMES`, or `ROBINHOOD_TESTNET` are treated as major. The inlined ABI in `src/abi/Veya.json` must match `Veya.sol` at the deployed address.
 
 ### Environment variables
 
@@ -540,7 +540,7 @@ Never commit `VEYA_DEPLOYER_PRIVATE_KEY`, funded keystore files, or `~/.veya` me
 
 <div align="center">
 
-**@veyanet/sdk documentation v1.2.10**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
+**@veyanet/sdk documentation v1.2.11**: Bounded autonomous systems on Robinhood Chain, post-quantum secured, without treating Veya.sol as a token.
 
 [Deployment](./DEPLOYMENT.md) • [Types](./api/types-reference.md) • [Veya.sol](./programs/veya-contract.md) • [Operator surface](./CLI.md)
 
