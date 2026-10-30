@@ -66,7 +66,7 @@ These constraints apply to every document, code path, and operator workflow in t
 |-----------|---------------|---------------------|
 | **Environment isolation** | Typed environments with on-chain spending limits, tool policies, memory nullifiers | [programs/veya-contract.md](./programs/veya-contract.md) |
 | **No API dependency for primitives** | Local JSON store (`~/.veya`), Node scripts, validator nodes, sealed node: no hosted coordination API required | [CLI.md](./CLI.md) |
-| **Validator consensus** | 2-of-3 quorum on critical executions before `attestExecution` | [api/types-reference.md](./api/types-reference.md#consensusresult) |
+| **Validator consensus** | 2-of-3 quorum on critical executions before `attestExecution` | [api/types-reference.md](./api/types-reference.md#consensus-types) |
 | **Post-quantum security** | ML-DSA-44 identity and attestation; Kyber-768 session transport; BLAKE3 commitments | Package README and `src/pq/` |
 | **Off-chain PQ verification** | EVM gas cannot run ML-DSA at production throughput; chain stores hashes and signature bytes | [programs/veya-contract.md](./programs/veya-contract.md) |
 | **BLAKE3 everywhere** | Execution hashes, pubkey fingerprints, ciphertext commitments | `pq.hashBlake3` |
