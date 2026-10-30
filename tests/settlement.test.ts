@@ -52,7 +52,7 @@ describe("settlement profile", () => {
   it("reports mainnet funding without treating the testnet key as ready", () => {
     expect(mainnetFundingStatus({ keyConfigured: false, balanceWei: 1n }).ready).toBe(false);
     expect(mainnetFundingStatus({ keyConfigured: true, balanceWei: 0n }).reason).toBe(
-      "mainnet relayer is unfunded",
+      "mainnet host signer is unfunded",
     );
     expect(mainnetFundingStatus({ keyConfigured: true, balanceWei: 1n }).ready).toBe(true);
   });
