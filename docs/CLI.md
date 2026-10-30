@@ -26,7 +26,7 @@ The optional binary `veya` (`veya-cli`) lives in **`cli`**. Use it if you want l
 5. [npm scripts](#npm-scripts)
 6. [examples/quickstart.ts](#examplesquickstartts)
 7. [scripts/doctor.ts](#scriptsdoctorts)
-8. [scripts/live-rpc.ts](#scriptslive-rpts)
+8. [scripts/live-rpc.ts](#scriptslive-rpcts)
 9. [Programmatic VeyaClient](#programmatic-veyaclient)
 10. [Consensus from Node](#consensus-from-node)
 11. [Sealed execution from Node](#sealed-execution-from-node)
@@ -530,7 +530,7 @@ await evm.recordSpend(agentUuid, 1_000_000_000_000_000n);
 
 ### ConsensusResult
 
-See [types-reference.md](./api/types-reference.md#consensusresult). Pipe with `jq` if you wrap the client in a shell that prints JSON:
+See [types-reference.md](./api/types-reference.md#consensus-types). Pipe with `jq` if you wrap the client in a shell that prints JSON:
 
 ```bash
 npx tsx scripts/run-consensus.ts | jq -r .agreed_blake3_hash
