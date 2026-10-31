@@ -8,7 +8,7 @@
  */
 
 export const SDK_NAME = "@veyanet/sdk";
-export const SDK_VERSION = "1.2.11";
+export const SDK_VERSION = "1.2.13";
 
 /** What this package is, in one object operators can log from doctor scripts. */
 export const SDK_SURFACE = {
@@ -25,6 +25,8 @@ export const SDK_SURFACE = {
 } as const;
 
 export { VeyaClient } from "./client/VeyaClient.js";
+export { VeyaTiers, VeyaApiError, getTier, getTierTable, DEFAULT_API_URL } from "./client/tiers.js";
+export type { AccountTier, TierLimits, TierTable, TierTableEntry, TierId, VeyaApiOptions, MessageSigner } from "./client/tiers.js";
 export { proveInput, canonicalJson, TX_HASH_RE } from "./proof.js";
 export {
   SETTLEMENT,
