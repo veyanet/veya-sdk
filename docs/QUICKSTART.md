@@ -88,7 +88,7 @@ This compiles `src/` with tsup into ESM + CJS under `dist/`, including types.
 `https://api.veyanet.tech` depends on the published SDK at an exact version:
 
 ```json
-"@veyanet/sdk": "1.2.11"
+"@veyanet/sdk": "1.2.13"
 ```
 
 ```ts
