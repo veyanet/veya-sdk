@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="./assets/logo.png" width="400" alt="VEYA Logo" />
+  <img src="./assets/logo.png" width="640" alt="VEYA SDK (@veyanet/sdk)" />
 
   # VEYA TypeScript SDK
 
   **The official client for post-quantum agent identity, 2-of-3 consensus, sealed execution, and protocol settlement on Robinhood Chain.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.11-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
+  [![NPM Version](https://img.shields.io/badge/@veyanet/sdk-1.2.13-cb3837.svg?style=flat-edge)](https://www.npmjs.com/package/@veyanet/sdk)
   [![Node Version](https://img.shields.io/badge/Node-%3E%3D20-green.svg?style=flat-edge)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-edge)](https://www.typescriptlang.org/)
 
@@ -48,6 +48,7 @@ By integrating `@veyanet/sdk` into your agentic runtime, you enable the followin
     * [Distributed 2-of-3 Consensus](#2-distributed-2-of-3-consensus)
     * [Sealed Execution (AES-256-GCM)](#3-sealed-execution-aes-256-gcm)
     * [On-Chain Attestation & EVM Anchoring](#4-on-chain-attestation--evm-anchoring)
+    * [$VEYA Account Tiers (API limits)](#5-veya-account-tiers-api-limits)
 6. [Comprehensive Quickstart Script](#-comprehensive-quickstart-script)
 7. [Advanced Cryptography Implementation](#-advanced-cryptography-implementation)
 8. [Error Handling & Reliability](#-error-handling--reliability)
@@ -285,6 +286,39 @@ console.log("Environment Tx:", explorer.environment);
 console.log("Commitment Tx:", explorer.memo);
 ```
 
+### 5. $VEYA Account Tiers (API limits)
+The hosted API (`https://api.veyanet.tech`) reads the $VEYA held by your sign-in wallet plus up to 3 linked wallets on Robinhood Chain mainnet, sums it, and sets the limits of every authenticated call from that tier. `VeyaTiers` reads your tier and the tier table, and links wallets with a signature (no transaction, no gas).
+
+| Tier | Whole $VEYA held (summed) | Daily actions | Daily receipts | Receipt history | API rate per minute |
+|------|---------------------------|---------------|----------------|-----------------|---------------------|
+| Base | under 1,000,000 | 2,000 | 100 | 90 days | 1x (dev key 120, live key 600) |
+| Holder | 1,000,000 | 5,000 | 250 | 365 days | 1.5x (180 / 900) |
+| Builder | 5,000,000 | 10,000 | 500 | full | 2x (240 / 1,200) |
+| Core | 10,000,000 | 25,000 | 1,000 | full | 4x (480 / 2,400) |
+
+These are the server defaults; the API is the source of truth, so read them with `getTierTable()` rather than hard-coding them.
+
+```typescript
+import { VeyaTiers, VeyaApiError } from "@veyanet/sdk";
+
+const tiers = new VeyaTiers({ apiKey: process.env.VEYA_API_KEY });
+
+const table = await tiers.getTierTable();          // no key needed
+const me = await tiers.getTier();                  // tier, limits, today's use
+console.log(me.tier.name, me.balance, me.limits.dailyActions, me.today.actions.used);
+
+// Link another wallet you control (counts toward the sum, max 3 linked)
+await tiers.linkWalletWithSigner(otherWallet);     // any signer with getAddress + signMessage
+
+try {
+  await tiers.getTier();
+} catch (e) {
+  if (e instanceof VeyaApiError && e.code === "DAILY_LIMIT") console.log(e.tier, e.retryAfterSeconds);
+}
+```
+
+Source: [src/client/tiers.ts](./src/client/tiers.ts).
+
 ---
 
 ## 🚀 Comprehensive Quickstart Script
@@ -422,6 +456,7 @@ This README serves as the entry point. For detailed method-by-method breakdowns 
 | **[Verification Guide](./docs/VERIFICATION.md)** | Audit | Off-chain attestation and receipt verification procedures. |
 | **[Deployment Guide](./docs/DEPLOYMENT.md)** | Operations | Cluster deployment, environment setup, and validator management. |
 | **[EVM Anchoring](./docs/sdk/evm-anchoring.md)** | Blockchain | `EvmAnchor` and `Veya.sol` transaction submission. |
+| **[Account Tiers](./src/client/tiers.ts)** | API | $VEYA tiers, the limits they set, and `VeyaTiers`. |
 | **[Configuration Reference](./docs/sdk/configuration.md)** | Config | Configuration resolution cascade and environment variables. |
 | **[Types Reference](./docs/api/types-reference.md)** | Reference | Full TypeScript interface and type map. |
 | **[Validator Cluster](./docs/operations/consensus-cluster.md)** | Operations | 2-of-3 validator fleet management. |
