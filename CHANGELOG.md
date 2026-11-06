@@ -8,6 +8,35 @@ This package settles on Robinhood Chain through `Veya.sol`, a protocol contract 
 
 ---
 
+## [1.2.13] — 2026-11-06
+
+Packaging, version and documentation release, published together with `@veyanet/mcp` 1.2.13, which pins this version exactly. The runtime source (`src/`) is the same as 1.2.12: no API, ABI, settlement, sealed-execution or post-quantum changes, and no new exports.
+
+### Changed
+- Package version **1.2.13** in `package.json`, `SDK_VERSION`, the surface test (`tests/surface.test.ts`), the README badge, `docs/README.md`, `docs/ARCHITECTURE.md`, `docs/CLI.md`, `docs/QUICKSTART.md` and `docs/sdk/configuration.md`. In 1.2.12 the surface test and these docs still said 1.2.11.
+- Integration snippets reference `"@veyanet/sdk": "1.2.13"` (exact pin).
+- Package logo (`assets/logo.png`): the VEYA wordmark on a dark card with the package name, readable in GitHub light and dark mode. The README shows it at 640 px.
+
+### Fixed
+- `package.json` `files` now includes `assets` and `CHANGELOG.md`. Before, it listed only `dist`, `src` and `README.md`, so the README logo and this changelog never reached the npm package.
+- `docs/sdk/configuration.md` no longer says the package version in this tree is not an npm publish.
+
+---
+
+## [1.2.12] — 2026-11-01
+
+Adds a read client for the hosted API's $VEYA account tiers, released alongside `@veyanet/mcp` 1.2.12 (which adds the `veya_tier` tool; that MCP release still pinned `@veyanet/sdk` 1.2.11). No ABI, settlement, sealed-execution or post-quantum changes since 1.2.11; every existing export is unchanged.
+
+### Added
+- `src/client/tiers.ts`, exported from the package root: the `VeyaTiers` class, the `getTier()` and `getTierTable()` helpers, `VeyaApiError` and `DEFAULT_API_URL` (`https://api.veyanet.tech`), plus the types `AccountTier`, `TierLimits`, `TierTable`, `TierTableEntry`, `TierId`, `VeyaApiOptions` and `MessageSigner`.
+- `VeyaTiers` methods: `getTierTable()` (no key needed), `getTier()` (your tier, summed balance, counted wallets, the limits that apply and today's use), `requestWalletLink()`, `linkWallet()`, `linkWalletWithSigner()` and `unlinkWallet()`. Wallet links are a signed message, not a transaction. The module only reads what the API reports; it never decides a tier or a limit itself.
+- README section "$VEYA Account Tiers (API limits)" with the server-default tier table and a `VeyaTiers` example.
+
+### Changed
+- Package version **1.2.12** in `package.json`, `SDK_VERSION` and the README badge. The surface test and the pages under `docs/` still said 1.2.11 in this release; 1.2.13 fixes them.
+
+---
+
 ## [1.2.11] — 2026-10-30
 
 Version, wording and documentation release, published alongside `@veyanet/mcp` 1.2.11. No API, ABI or behaviour changes since 1.2.10. One returned text changed (see Changed).
